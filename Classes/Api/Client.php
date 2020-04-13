@@ -46,7 +46,7 @@ class Client
 
     /**
      * Returns an authorized API client.
-     * @return Google_Client the authorized client object
+     * @return \Google_Client the authorized client object
      */
     public function getClient()
     {
