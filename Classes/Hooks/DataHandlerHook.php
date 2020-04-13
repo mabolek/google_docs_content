@@ -1,8 +1,9 @@
 <?php
 declare(strict_types=1);
 
-namespace GeorgRinger\GoogleDocsContent\Api;
+namespace GeorgRinger\GoogleDocsContent\Hooks;
 
+use GeorgRinger\GoogleDocsContent\Api\GoogleDocsApi;
 use TYPO3\CMS\Backend\Utility\BackendUtility;
 use TYPO3\CMS\Core\DataHandling\DataHandler;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
