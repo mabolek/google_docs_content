@@ -95,7 +95,6 @@ class GoogleDriveDriver extends AbstractHierarchicalFilesystemDriver
         // The capabilities default of this driver. See CAPABILITY_* constants for possible values
         $this->capabilities =
             ResourceStorage::CAPABILITY_BROWSABLE
-            | ResourceStorage::CAPABILITY_PUBLIC
             | ResourceStorage::CAPABILITY_WRITABLE;
         $this->streamWrapperProtocol = 'googleDrive-' . substr(md5(uniqid()), 0, 7);
         $this->googleDriveClient = $googleDriveClient;
@@ -125,7 +124,7 @@ class GoogleDriveDriver extends AbstractHierarchicalFilesystemDriver
 
     public function getRootLevelFolder()
     {
-        return 'root';
+        return $this->configuration['rootIdentifier'] ?? 'root';
     }
 
     public function getDefaultFolder()
