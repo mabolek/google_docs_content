@@ -8,6 +8,7 @@ use GeorgRinger\GoogleDocsContent\Api\Client;
 use GuzzleHttp\Psr7\StreamWrapper;
 use TYPO3\CMS\Core\Resource\Driver\AbstractHierarchicalFilesystemDriver;
 use TYPO3\CMS\Core\Resource\Exception\InsufficientFolderAccessPermissionsException;
+use TYPO3\CMS\Core\Resource\Exception\ResourceDoesNotExistException;
 use TYPO3\CMS\Core\Resource\ResourceStorage;
 use TYPO3\CMS\Core\Utility\PathUtility;
 
@@ -167,6 +168,10 @@ class GoogleDriveDriver extends AbstractHierarchicalFilesystemDriver
     {
         if ($identifier === null) {
             return null;
+        }
+
+        if ($identifier === '') {
+            $identifier = $this->getRootLevelFolder();
         }
 
         if (isset($this->metaInfoCache[$identifier])) {
@@ -339,7 +344,11 @@ class GoogleDriveDriver extends AbstractHierarchicalFilesystemDriver
 
     public function getFolderInfoByIdentifier($folderIdentifier)
     {
-        $record = $this->metaInfoCache[$folderIdentifier];
+        if ($folderIdentifier === '') {
+            $folderIdentifier = $this->getRootLevelFolder();
+        }
+
+        $record = $this->getObjectByIdentifier($folderIdentifier);
 
         $metaInfo = [
             'name' => $record['name'],
@@ -364,6 +373,10 @@ class GoogleDriveDriver extends AbstractHierarchicalFilesystemDriver
         $sort = '',
         $sortRev = false
     ) {
+        if ($folderIdentifier === '') {
+            $folderIdentifier = $this->getRootLevelFolder();
+        }
+
         $parameters = $this->additionalFields;
         $parameters['q'] = '\'' . $folderIdentifier . '\' in parents and trashed = false and not mimeType=\'application/vnd.google-apps.folder\'';
         $parametersHash = md5(serialize($parameters));
@@ -405,6 +418,10 @@ class GoogleDriveDriver extends AbstractHierarchicalFilesystemDriver
         $sort = '',
         $sortRev = false
     ) {
+        if ($folderIdentifier === '') {
+            $folderIdentifier = $this->getRootLevelFolder();
+        }
+
         $parameters = $this->additionalFields;
         $parameters['q'] = '\'' . $folderIdentifier . '\' in parents and trashed = false and mimeType=\'application/vnd.google-apps.folder\'';
         $parametersHash = md5(serialize($parameters));
@@ -434,6 +451,10 @@ class GoogleDriveDriver extends AbstractHierarchicalFilesystemDriver
 
     public function countFilesInFolder($folderIdentifier, $recursive = false, array $filenameFilterCallbacks = [])
     {
+        if ($folderIdentifier === '') {
+            $folderIdentifier = $this->getRootLevelFolder();
+        }
+
         $parameters = $this->additionalFields;
         $parameters['q'] = '\'' . $folderIdentifier . '\' in parents and trashed = false and not mimeType=\'application/vnd.google-apps.folder\'';
         $parametersHash = md5(serialize($parameters));
@@ -457,6 +478,10 @@ class GoogleDriveDriver extends AbstractHierarchicalFilesystemDriver
 
     public function countFoldersInFolder($folderIdentifier, $recursive = false, array $folderNameFilterCallbacks = [])
     {
+        if ($folderIdentifier === '') {
+            $folderIdentifier = $this->getRootLevelFolder();
+        }
+
         $parameters = $this->additionalFields;
         $parameters['q'] = '\'' . $folderIdentifier . '\' in parents and trashed = false and mimeType=\'application/vnd.google-apps.folder\'';
         $parametersHash = md5(serialize($parameters));
@@ -480,14 +505,14 @@ class GoogleDriveDriver extends AbstractHierarchicalFilesystemDriver
 
     public function getParentFolderIdentifierOfIdentifier($identifier)
     {
-        if ($identifier = $this->getRootLevelFolder()) {
-            throw new InsufficientFolderAccessPermissionsException();
+        if ($identifier === $this->getRootLevelFolder()) {
+            throw new ResourceDoesNotExistException();
         }
 
         $record = $this->getObjectByIdentifier($identifier);
 
-        if ($record === null) {
-            return null;
+        if ($record === null || count($record['parents']) === 0) {
+            throw new ResourceDoesNotExistException();
         }
 
         return $record['parents'][0];
