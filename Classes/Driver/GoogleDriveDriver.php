@@ -7,6 +7,7 @@ namespace GeorgRinger\GoogleDocsContent\Driver;
 use GeorgRinger\GoogleDocsContent\Api\Client;
 use GuzzleHttp\Psr7\StreamWrapper;
 use TYPO3\CMS\Core\Resource\Driver\AbstractHierarchicalFilesystemDriver;
+use TYPO3\CMS\Core\Resource\Exception\InsufficientFolderAccessPermissionsException;
 use TYPO3\CMS\Core\Resource\ResourceStorage;
 use TYPO3\CMS\Core\Utility\PathUtility;
 
@@ -85,6 +86,16 @@ class GoogleDriveDriver extends AbstractHierarchicalFilesystemDriver
     protected static $settings = null;
 
     /**
+     * Additional fields to request from Google API
+     *
+     * @var array
+     */
+    protected $additionalFields = [
+        //'fields' => ['createdTime'=>'','id'=>'','mimeType'=>'','modifiedTime'=>'','name'=>'','parents'=>'','size'=>'']
+        'fields' => 'files/createdTime,files/id,files/mimeType,files/modifiedTime,files/name,files/parents,files/size'
+    ];
+
+    /**
      * @var array
      */
     protected $temporaryPaths = [];
@@ -152,14 +163,61 @@ class GoogleDriveDriver extends AbstractHierarchicalFilesystemDriver
         // TODO: Implement deleteFolder() method.
     }
 
+    protected function getObjectByIdentifier($identifier)
+    {
+        if ($identifier === null) {
+            return null;
+        }
+
+        if (isset($this->metaInfoCache[$identifier])) {
+            return $this->metaInfoCache[$identifier];
+        }
+
+        $googleClient = $this->googleDriveClient->getClient();
+        $service = new \Google_Service_Drive($googleClient);
+
+        try {
+            $record = $service->files->get($identifier, ['fields' => 'createdTime,id,mimeType,modifiedTime,name,parents,size']);
+        } catch (\Google_Service_Exception $e) {
+            if ($e->getCode() === 404) {
+                return null;
+            }
+
+            throw $e;
+        }
+
+        if (!$record instanceof \Google_Service_Drive_DriveFile) {
+            return null;
+        }
+
+        $this->metaInfoCache[$identifier] = $record;
+
+        return $record;
+    }
+
+    protected function objectExists($identifier, bool $isFolder = false)
+    {
+        $record = $this->getObjectByIdentifier($identifier);
+
+        if ($record === null) {
+            return false;
+        }
+
+        if (!$isFolder || ($isFolder && $record['mimeType'] === 'application/vnd.google-apps.folder')) {
+            return true;
+        }
+
+        return false;
+    }
+
     public function fileExists($fileIdentifier)
     {
-        return isset($this->metaInfoCache[$fileIdentifier]);
+        return $this->objectExists($fileIdentifier);
     }
 
     public function folderExists($folderIdentifier)
     {
-        return isset($this->metaInfoCache[$folderIdentifier]);
+        return $this->objectExists($folderIdentifier, true);
     }
 
     public function isFolderEmpty($folderIdentifier)
@@ -199,7 +257,7 @@ class GoogleDriveDriver extends AbstractHierarchicalFilesystemDriver
 
     public function hash($fileIdentifier, $hashAlgorithm)
     {
-        // TODO: Implement hash() method.
+        return $this->hashIdentifier($fileIdentifier);
     }
 
     public function moveFileWithinStorage($fileIdentifier, $targetFolderIdentifier, $newFileName)
@@ -264,8 +322,8 @@ class GoogleDriveDriver extends AbstractHierarchicalFilesystemDriver
         $metaInfo = [
             'name' => $record['name'],
             'identifier' => $record['id'],
-            'ctime' => time(),
-            'mtime' => time(),
+            'ctime' => $this->convertGoogleDateTimeStringToTimestamp($record['createdTime'])->getTimestamp(),
+            'mtime' => $this->convertGoogleDateTimeStringToTimestamp($record['modifiedTime'])->getTimestamp(),
             'identifier_hash' => $this->hashIdentifier($record['id']),
             'folder_hash' => $this->hashIdentifier($record['parents'][0]['id'] ?? 'root'),
             'extension' => PathUtility::pathinfo($record['name'], PATHINFO_EXTENSION),
@@ -306,9 +364,8 @@ class GoogleDriveDriver extends AbstractHierarchicalFilesystemDriver
         $sort = '',
         $sortRev = false
     ) {
-        $parameters = [
-            'q' => '\'' . $folderIdentifier . '\' in parents and trashed = false and not mimeType=\'application/vnd.google-apps.folder\''
-        ];
+        $parameters = $this->additionalFields;
+        $parameters['q'] = '\'' . $folderIdentifier . '\' in parents and trashed = false and not mimeType=\'application/vnd.google-apps.folder\'';
         $parametersHash = md5(serialize($parameters));
 
         if (isset($this->listQueryCache[$parametersHash])) {
@@ -348,9 +405,8 @@ class GoogleDriveDriver extends AbstractHierarchicalFilesystemDriver
         $sort = '',
         $sortRev = false
     ) {
-        $parameters = [
-            'q' => '\'' . $folderIdentifier . '\' in parents and trashed = false and mimeType=\'application/vnd.google-apps.folder\''
-        ];
+        $parameters = $this->additionalFields;
+        $parameters['q'] = '\'' . $folderIdentifier . '\' in parents and trashed = false and mimeType=\'application/vnd.google-apps.folder\'';
         $parametersHash = md5(serialize($parameters));
 
         if (isset($this->listQueryCache[$parametersHash])) {
@@ -378,9 +434,8 @@ class GoogleDriveDriver extends AbstractHierarchicalFilesystemDriver
 
     public function countFilesInFolder($folderIdentifier, $recursive = false, array $filenameFilterCallbacks = [])
     {
-        $parameters = [
-            'q' => '\'' . $folderIdentifier . '\' in parents and trashed = false and not mimeType=\'application/vnd.google-apps.folder\''
-        ];
+        $parameters = $this->additionalFields;
+        $parameters['q'] = '\'' . $folderIdentifier . '\' in parents and trashed = false and not mimeType=\'application/vnd.google-apps.folder\'';
         $parametersHash = md5(serialize($parameters));
 
         if (isset($this->listQueryCache[$parametersHash])) {
@@ -402,9 +457,8 @@ class GoogleDriveDriver extends AbstractHierarchicalFilesystemDriver
 
     public function countFoldersInFolder($folderIdentifier, $recursive = false, array $folderNameFilterCallbacks = [])
     {
-        $parameters = [
-            'q' => '\'' . $folderIdentifier . '\' in parents and trashed = false and mimeType=\'application/vnd.google-apps.folder\''
-        ];
+        $parameters = $this->additionalFields;
+        $parameters['q'] = '\'' . $folderIdentifier . '\' in parents and trashed = false and mimeType=\'application/vnd.google-apps.folder\'';
         $parametersHash = md5(serialize($parameters));
 
         if (isset($this->listQueryCache[$parametersHash])) {
@@ -424,6 +478,21 @@ class GoogleDriveDriver extends AbstractHierarchicalFilesystemDriver
         return count($records);
     }
 
+    public function getParentFolderIdentifierOfIdentifier($identifier)
+    {
+        if ($identifier = $this->getRootLevelFolder()) {
+            throw new InsufficientFolderAccessPermissionsException();
+        }
+
+        $record = $this->getObjectByIdentifier($identifier);
+
+        if ($record === null) {
+            return null;
+        }
+
+        return $record['parents'][0];
+    }
+
     protected function initializeClient()
     {
         if (!$this->googleDriveClient) {
@@ -432,5 +501,9 @@ class GoogleDriveDriver extends AbstractHierarchicalFilesystemDriver
         }
 
         return $this;
+    }
+
+    protected function convertGoogleDateTimeStringToTimestamp($dateTimeString) {
+        return \DateTime::createFromFormat('Y-m-d\TH:i:s.???\Z', $dateTimeString);
     }
 }
