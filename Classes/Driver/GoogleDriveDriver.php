@@ -472,6 +472,10 @@ class GoogleDriveDriver extends AbstractHierarchicalFilesystemDriver
             $objects[$record->id] = $record->id;
         }
 
+        if ($sortRev) {
+            $objects = array_reverse($objects);
+        }
+
         return $objects;
     }
 
