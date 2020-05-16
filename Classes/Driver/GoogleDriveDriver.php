@@ -368,6 +368,25 @@ class GoogleDriveDriver extends AbstractHierarchicalFilesystemDriver
         // TODO: Implement getFileInFolder() method.
     }
 
+    /**
+     * Get files or folders within a folder
+     *
+     * Returns a list of files or folders inside the specified path
+     *
+     * @param string $folderIdentifier
+     * @param int $start
+     * @param int $numberOfItems
+     * @param bool $recursive
+     * @param array $nameFilterCallbacks callbacks for filtering the items
+     * @param string $sort Property name used to sort the items.
+     *                     Among them may be: '' (empty, no sorting), name,
+     *                     fileext, size, tstamp and rw.
+     *                     If a driver does not support the given property, it
+     *                     should fall back to "name".
+     * @param bool $sortRev TRUE to indicate reverse sorting (last to first)
+     * @param bool $isFolder Returns a list of folders if true. Otherwise, files.
+     * @return array of FileIdentifiers
+     */
     protected function getObjectsInFolder(
         $folderIdentifier,
         $start = 0,
@@ -411,6 +430,17 @@ class GoogleDriveDriver extends AbstractHierarchicalFilesystemDriver
         $objects = [];
 
         foreach ($records as $record) {
+            if (
+                !$this->applyFilterMethodsToDirectoryItem(
+                    $nameFilterCallbacks,
+                    $record['name'],
+                    $record['id'],
+                    $folderIdentifier
+                )
+            ) {
+                continue;
+            }
+
             $objects[$record->id] = $record->id;
         }
 
@@ -553,13 +583,18 @@ class GoogleDriveDriver extends AbstractHierarchicalFilesystemDriver
      * @throws \RuntimeException
      * @return bool
      */
-    protected function applyFilterMethodsToDirectoryItem(array $filterMethods, $itemName, $itemIdentifier, $parentIdentifier)
+    protected function applyFilterMethodsToDirectoryItem(
+        array $filterMethods,
+        $itemName,
+        $itemIdentifier,
+        $parentIdentifier
+    )
     {
         foreach ($filterMethods as $filter) {
             if (is_array($filter)) {
                 $result = call_user_func($filter, $itemName, $itemIdentifier, $parentIdentifier, [], $this);
-                // We have to use -1 as the „don't include“ return value, as call_user_func() will return FALSE
-                // If calling the method succeeded and thus we can't use that as a return value.
+                // We have to use -1 as the "don't include" return value, as call_user_func() will return FALSE
+                // if calling the method succeeded and thus we can't use that as a return value.
                 if ($result === -1) {
                     return false;
                 } elseif ($result === false) {
