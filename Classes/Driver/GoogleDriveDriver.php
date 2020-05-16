@@ -411,6 +411,20 @@ class GoogleDriveDriver extends AbstractHierarchicalFilesystemDriver
         }
         $parameters['q'] .= ' mimeType=\'application/vnd.google-apps.folder\' ';
 
+        switch ($sort) {
+            case 'size':
+                $orderBy = 'quotaBytesUsed';
+                break;
+            case 'tstamp':
+                $orderBy = 'modifiedTime';
+                break;
+            case '':
+            default:
+                $orderBy = 'name'; // The default fallback
+                break;
+        }
+        $parameters['orderBy'] = $orderBy;
+
         $parametersHash = md5(serialize($parameters));
 
         if (isset($this->listQueryCache[$parametersHash])) {
