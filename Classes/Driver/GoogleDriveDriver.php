@@ -322,7 +322,11 @@ class GoogleDriveDriver extends AbstractHierarchicalFilesystemDriver
 
     public function getFileInfoByIdentifier($fileIdentifier, array $propertiesToExtract = [])
     {
-        $record = $this->metaInfoCache[$fileIdentifier];
+        if (!$this->objectExists($fileIdentifier)) {
+            return null;
+        }
+
+        $record = $this->getObjectByIdentifier($fileIdentifier);
 
         $metaInfo = [
             'name' => $record['name'],
