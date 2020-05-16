@@ -331,8 +331,8 @@ class GoogleDriveDriver extends AbstractHierarchicalFilesystemDriver
         $metaInfo = [
             'name' => $record['name'],
             'identifier' => $record['id'],
-            'ctime' => $this->convertGoogleDateTimeStringToTimestamp($record['createdTime'])->getTimestamp(),
-            'mtime' => $this->convertGoogleDateTimeStringToTimestamp($record['modifiedTime'])->getTimestamp(),
+            'ctime' => $this->convertGoogleDateTimeStringToTimestamp($record['createdTime']),
+            'mtime' => $this->convertGoogleDateTimeStringToTimestamp($record['modifiedTime']),
             'identifier_hash' => $this->hashIdentifier($record['id']),
             'folder_hash' => $this->hashIdentifier($record['parents'][0]['id'] ?? 'root'),
             'extension' => PathUtility::pathinfo($record['name'], PATHINFO_EXTENSION),
@@ -532,7 +532,35 @@ class GoogleDriveDriver extends AbstractHierarchicalFilesystemDriver
         return $this;
     }
 
-    protected function convertGoogleDateTimeStringToTimestamp($dateTimeString) {
-        return \DateTime::createFromFormat('Y-m-d\TH:i:s.???\Z', $dateTimeString);
+    /**
+     * Returns a unix timestamp from a Google DateTime string (zero if invalid)
+     *
+     * Example input: 2014-06-24T22:39:34.652Z
+     *
+     * @param $dateTimeString
+     * @return int
+     */
+    protected function convertGoogleDateTimeStringToTimestamp($dateTimeString): int
+    {
+        $dateTime = $this->convertGoogleDateTimeStringToDateTime($dateTimeString);
+
+        if ($dateTime === null) {
+            return 0;
+        }
+
+        return $dateTime->getTimestamp();
+    }
+
+    /**
+     * Returns a DateTime object from a Google DateTime string (null if invalid)
+     *
+     * Example input: 2014-06-24T22:39:34.652Z
+     *
+     * @param $dateTimeString
+     * @return \DateTime|null
+     */
+    protected function convertGoogleDateTimeStringToDateTime($dateTimeString): ?\DateTime
+    {
+        return \DateTime::createFromFormat('Y-m-d\TH:i:s.???\Z', $dateTimeString) ?? null;
     }
 }
