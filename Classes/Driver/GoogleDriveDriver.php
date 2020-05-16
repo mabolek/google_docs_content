@@ -93,7 +93,7 @@ class GoogleDriveDriver extends AbstractHierarchicalFilesystemDriver
      */
     protected $additionalFields = [
         //'fields' => ['createdTime'=>'','id'=>'','mimeType'=>'','modifiedTime'=>'','name'=>'','parents'=>'','size'=>'']
-        'fields' => 'files/createdTime,files/id,files/mimeType,files/modifiedTime,files/name,files/parents,files/size'
+        'fields' => 'files/createdTime,files/id,files/mimeType,files/modifiedTime,files/name,files/parents,files/size,files/quotaBytesUsed'
     ];
 
     /**
@@ -182,7 +182,7 @@ class GoogleDriveDriver extends AbstractHierarchicalFilesystemDriver
         $service = new \Google_Service_Drive($googleClient);
 
         try {
-            $record = $service->files->get($identifier, ['fields' => 'createdTime,id,mimeType,modifiedTime,name,parents,size']);
+            $record = $service->files->get($identifier, ['fields' => 'createdTime,id,mimeType,modifiedTime,name,parents,size,quotaBytesUsed']);
         } catch (\Google_Service_Exception $e) {
             if ($e->getCode() === 404) {
                 return null;
@@ -337,6 +337,7 @@ class GoogleDriveDriver extends AbstractHierarchicalFilesystemDriver
             'folder_hash' => $this->hashIdentifier($record['parents'][0]['id'] ?? 'root'),
             'extension' => PathUtility::pathinfo($record['name'], PATHINFO_EXTENSION),
             'storage' => $this->storageUid,
+            'size' => $record['quotaBytesUsed']
         ];
 
         if (count($propertiesToExtract) > 0) {
