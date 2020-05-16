@@ -386,13 +386,11 @@ class GoogleDriveDriver extends AbstractHierarchicalFilesystemDriver
         }
 
         $parameters = $this->additionalFields;
-        $parameters['q'] = '\'' . $folderIdentifier . '\' in parents and trashed = false';
-
-        if ($isFolder) {
-            $parameters['q'] .= ' and mimeType=\'application/vnd.google-apps.folder\'';
-        } else {
-            $parameters['q'] .= ' and not mimeType=\'application/vnd.google-apps.folder\'';
+        $parameters['q'] = ' \'' . $folderIdentifier . '\' in parents and trashed = false and ';
+        if (!$isFolder) {
+            $parameters['q'] .= ' not ';
         }
+        $parameters['q'] .= ' mimeType=\'application/vnd.google-apps.folder\' ';
 
         $parametersHash = md5(serialize($parameters));
 
