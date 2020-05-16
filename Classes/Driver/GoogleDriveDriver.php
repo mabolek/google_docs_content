@@ -368,21 +368,32 @@ class GoogleDriveDriver extends AbstractHierarchicalFilesystemDriver
         // TODO: Implement getFileInFolder() method.
     }
 
-    public function getFilesInFolder(
+    protected function getObjectsInFolder(
         $folderIdentifier,
         $start = 0,
         $numberOfItems = 0,
         $recursive = false,
-        array $filenameFilterCallbacks = [],
+        array $nameFilterCallbacks = [],
         $sort = '',
-        $sortRev = false
-    ) {
-        if ($folderIdentifier === '') {
+        $sortRev = false,
+        $isFolder = false
+    )
+    {
+        if ($folderIdentifier === '' && $isFolder === true) {
             $folderIdentifier = $this->getRootLevelFolder();
+        } elseif ($folderIdentifier === '') {
+            return [];
         }
 
         $parameters = $this->additionalFields;
-        $parameters['q'] = '\'' . $folderIdentifier . '\' in parents and trashed = false and not mimeType=\'application/vnd.google-apps.folder\'';
+        $parameters['q'] = '\'' . $folderIdentifier . '\' in parents and trashed = false';
+
+        if ($isFolder) {
+            $parameters['q'] .= ' and mimeType=\'application/vnd.google-apps.folder\'';
+        } else {
+            $parameters['q'] .= ' and not mimeType=\'application/vnd.google-apps.folder\'';
+        }
+
         $parametersHash = md5(serialize($parameters));
 
         if (isset($this->listQueryCache[$parametersHash])) {
@@ -399,13 +410,33 @@ class GoogleDriveDriver extends AbstractHierarchicalFilesystemDriver
             $this->listQueryCache[$parametersHash] = $records;
         }
 
-        $folders = [];
+        $objects = [];
 
         foreach ($records as $record) {
-            $folders[$record->id] = $record->id;
+            $objects[$record->id] = $record->id;
         }
 
-        return $folders;
+        return $objects;
+    }
+
+    public function getFilesInFolder(
+        $folderIdentifier,
+        $start = 0,
+        $numberOfItems = 0,
+        $recursive = false,
+        array $filenameFilterCallbacks = [],
+        $sort = '',
+        $sortRev = false
+    ) {
+        return $this->getObjectsInFolder(
+            $folderIdentifier,
+            $start,
+            $numberOfItems,
+            $recursive,
+            $filenameFilterCallbacks,
+            $sort,
+            $sortRev
+        );
     }
 
     public function getFolderInFolder($folderName, $folderIdentifier)
@@ -422,35 +453,16 @@ class GoogleDriveDriver extends AbstractHierarchicalFilesystemDriver
         $sort = '',
         $sortRev = false
     ) {
-        if ($folderIdentifier === '') {
-            $folderIdentifier = $this->getRootLevelFolder();
-        }
-
-        $parameters = $this->additionalFields;
-        $parameters['q'] = '\'' . $folderIdentifier . '\' in parents and trashed = false and mimeType=\'application/vnd.google-apps.folder\'';
-        $parametersHash = md5(serialize($parameters));
-
-        if (isset($this->listQueryCache[$parametersHash])) {
-            $records = $this->listQueryCache[$parametersHash];
-        } else {
-            $googleClient = $this->googleDriveClient->getClient();
-            $service = new \Google_Service_Drive($googleClient);
-            $records = $service->files->listFiles($parameters)->getFiles();
-
-            foreach ($records as $record) {
-                $this->metaInfoCache[$record->id] = $record;
-            }
-
-            $this->listQueryCache[$parametersHash] = $records;
-        }
-
-        $folders = [];
-
-        foreach ($records as $record) {
-            $folders[$record->id] = $record->id;
-        }
-
-        return $folders;
+        return $this->getObjectsInFolder(
+            $folderIdentifier,
+            $start,
+            $numberOfItems,
+            $recursive,
+            $folderNameFilterCallbacks,
+            $sort,
+            $sortRev,
+            true
+        );
     }
 
     public function countFilesInFolder($folderIdentifier, $recursive = false, array $filenameFilterCallbacks = [])
@@ -530,6 +542,34 @@ class GoogleDriveDriver extends AbstractHierarchicalFilesystemDriver
         }
 
         return $this;
+    }
+
+    /**
+     * Applies a set of filter methods to a file name to find out if it should be used or not. This is e.g. used by
+     * directory listings.
+     *
+     * @param array $filterMethods The filter methods to use
+     * @param string $itemName
+     * @param string $itemIdentifier
+     * @param string $parentIdentifier
+     * @throws \RuntimeException
+     * @return bool
+     */
+    protected function applyFilterMethodsToDirectoryItem(array $filterMethods, $itemName, $itemIdentifier, $parentIdentifier)
+    {
+        foreach ($filterMethods as $filter) {
+            if (is_array($filter)) {
+                $result = call_user_func($filter, $itemName, $itemIdentifier, $parentIdentifier, [], $this);
+                // We have to use -1 as the „don't include“ return value, as call_user_func() will return FALSE
+                // If calling the method succeeded and thus we can't use that as a return value.
+                if ($result === -1) {
+                    return false;
+                } elseif ($result === false) {
+                    throw new \RuntimeException('Could not apply file/folder name filter ' . $filter[0] . '::' . $filter[1]);
+                }
+            }
+        }
+        return true;
     }
 
     /**
