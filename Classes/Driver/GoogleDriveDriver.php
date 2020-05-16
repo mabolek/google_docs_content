@@ -426,6 +426,8 @@ class GoogleDriveDriver extends AbstractHierarchicalFilesystemDriver
         }
         $parameters['orderBy'] = $orderBy;
 
+        $parameters['pageSize'] = 1000;
+
         $parametersHash = md5(serialize($parameters));
 
         if (isset($this->listQueryCache[$parametersHash])) {
@@ -433,7 +435,18 @@ class GoogleDriveDriver extends AbstractHierarchicalFilesystemDriver
         } else {
             $googleClient = $this->googleDriveClient->getClient();
             $service = new \Google_Service_Drive($googleClient);
-            $records = $service->files->listFiles($parameters)->getFiles();
+
+            $records = [];
+            do {
+                $fileList = $service->files->listFiles($parameters);
+                $fileRecords = $fileList->getFiles();
+
+                foreach ($fileRecords as $fileRecord) {
+                    $records[] = $fileRecord;
+                }
+
+                $parameters['pageToken'] = $fileList->getNextPageToken();
+            } while($parameters['pageToken'] !== null);
 
             foreach ($records as $record) {
                 $this->metaInfoCache[$record->id] = $record;
