@@ -10,6 +10,7 @@ use TYPO3\CMS\Core\Resource\Driver\AbstractHierarchicalFilesystemDriver;
 use TYPO3\CMS\Core\Resource\Exception\InsufficientFolderAccessPermissionsException;
 use TYPO3\CMS\Core\Resource\Exception\ResourceDoesNotExistException;
 use TYPO3\CMS\Core\Resource\ResourceStorage;
+use TYPO3\CMS\Core\Utility\ArrayUtility;
 use TYPO3\CMS\Core\Utility\PathUtility;
 
 class GoogleDriveDriver extends AbstractHierarchicalFilesystemDriver
@@ -19,6 +20,11 @@ class GoogleDriveDriver extends AbstractHierarchicalFilesystemDriver
     const EXTENSION_KEY = 'google_docs_content';
 
     const EXTENSION_NAME = 'Google Docs Content';
+
+    const TYPO3_TO_GOOGLE_FIELDS = [
+        'size' => 'quotaBytesUsed',
+        'tstamp' => 'modifiedTime',
+    ];
 
     /**
      * @var Client
@@ -424,19 +430,7 @@ class GoogleDriveDriver extends AbstractHierarchicalFilesystemDriver
         }
         $parameters['q'] .= ' mimeType=\'application/vnd.google-apps.folder\' ';
 
-        switch ($sort) {
-            case 'size':
-                $orderBy = 'quotaBytesUsed';
-                break;
-            case 'tstamp':
-                $orderBy = 'modifiedTime';
-                break;
-            case '':
-            default:
-                $orderBy = 'name'; // The default fallback
-                break;
-        }
-        $parameters['orderBy'] = $orderBy;
+        $parameters['orderBy'] = self::TYPO3_TO_GOOGLE_FIELDS[$sort] ?? 'name';
 
         $parameters['pageSize'] = 1000;
 
@@ -484,10 +478,6 @@ class GoogleDriveDriver extends AbstractHierarchicalFilesystemDriver
             $objects[$record->id] = $record->id;
         }
 
-        if ($sortRev) {
-            $objects = array_reverse($objects);
-        }
-
         if ($recursive && count($objects) <= $start + $numberOfItems) {
             if ($isFolder) {
                 $folders = $objects;
@@ -520,6 +510,35 @@ class GoogleDriveDriver extends AbstractHierarchicalFilesystemDriver
 
         if ($start !== 0 || $numberOfItems !== 0) {
             $objects = array_slice($objects, $start, $numberOfItems === 0 ? null : $numberOfItems);
+        }
+
+        // Sort manually if we're recursing or if the sorting field is not one of the ones supported by Google natively.
+        if (($recursive || !in_array($sort, ['', 'name', 'size', 'tstamp'], true)) && count($objects) > 1) {
+            switch ($sort) {
+                case 'rw':
+                    // TODO: Implement permission-based sorting when we implement permissions
+                    break;
+                case 'fileext':
+                    usort($objects, function ($a, $b) {
+                        return strcmp(
+                            pathinfo($a, PATHINFO_EXTENSION),
+                            pathinfo($b, PATHINFO_EXTENSION)
+                        );
+                    });
+                    break;
+                default:
+                    $sortingKey = self::TYPO3_TO_GOOGLE_FIELDS[$sortingKey];
+                    if (!in_array($sortingKey, array_keys($objects[0]))) {
+                        $sortingKey = 'name';
+                    }
+                    $objects = ArrayUtility::sortArraysByKey($objects, $sortingKey);
+                    break;
+            }
+
+        }
+
+        if ($sortRev && count($objects) > 1) {
+            $objects = array_reverse($objects);
         }
 
         return $objects;
