@@ -561,56 +561,24 @@ class GoogleDriveDriver extends AbstractHierarchicalFilesystemDriver
      */
     public function countFilesInFolder($folderIdentifier, $recursive = false, array $filenameFilterCallbacks = [])
     {
-        if ($folderIdentifier === '') {
-            $folderIdentifier = $this->getRootLevelFolder();
-        }
-
-        $parameters = $this->additionalFields;
-        $parameters['q'] = '\'' . $folderIdentifier . '\' in parents and trashed = false and not mimeType=\'application/vnd.google-apps.folder\'';
-        $parametersHash = md5(serialize($parameters));
-
-        if (isset($this->listQueryCache[$parametersHash])) {
-            $records = $this->listQueryCache[$parametersHash];
-        } else {
-            $googleClient = $this->googleDriveClient->getClient();
-            $service = new \Google_Service_Drive($googleClient);
-            $records = $service->files->listFiles($parameters)->getFiles();
-
-            foreach ($records as $record) {
-                $this->metaInfoCache[$record->id] = $record;
-            }
-
-            $this->listQueryCache[$parametersHash] = $records;
-        }
-
-        return count($records);
+        return count($this->getFilesInFolder(
+            $folderIdentifier,
+            0,
+            0,
+            $recursive,
+            $filenameFilterCallbacks
+        ));
     }
 
     public function countFoldersInFolder($folderIdentifier, $recursive = false, array $folderNameFilterCallbacks = [])
     {
-        if ($folderIdentifier === '') {
-            $folderIdentifier = $this->getRootLevelFolder();
-        }
-
-        $parameters = $this->additionalFields;
-        $parameters['q'] = '\'' . $folderIdentifier . '\' in parents and trashed = false and mimeType=\'application/vnd.google-apps.folder\'';
-        $parametersHash = md5(serialize($parameters));
-
-        if (isset($this->listQueryCache[$parametersHash])) {
-            $records = $this->listQueryCache[$parametersHash];
-        } else {
-            $googleClient = $this->googleDriveClient->getClient();
-            $service = new \Google_Service_Drive($googleClient);
-            $records = $service->files->listFiles($parameters)->getFiles();
-
-            foreach ($records as $record) {
-                $this->metaInfoCache[$record->id] = $record;
-            }
-
-            $this->listQueryCache[$parametersHash] = $records;
-        }
-
-        return count($records);
+        return count($this->getFoldersInFolder(
+            $folderIdentifier,
+            0,
+            0,
+            $recursive,
+            $folderNameFilterCallbacks
+        ));
     }
 
     public function getParentFolderIdentifierOfIdentifier($identifier)
