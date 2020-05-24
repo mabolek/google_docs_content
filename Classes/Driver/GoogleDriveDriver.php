@@ -488,6 +488,36 @@ class GoogleDriveDriver extends AbstractHierarchicalFilesystemDriver
             $objects = array_reverse($objects);
         }
 
+        if ($recursive && count($objects) <= $start + $numberOfItems) {
+            if ($isFolder) {
+                $folders = $objects;
+            } else {
+                $folders = $this->getFoldersInFolder(
+                    $folderIdentifier,
+                    0,
+                    0,
+                    false,
+                    $nameFilterCallbacks
+                );
+            }
+
+            foreach ($folders as $folder) {
+                $objectsInFolder = $this->getObjectsInFolder(
+                    $folder['id'],
+                    0,
+                    $start + $numberOfItems - count($objects),
+                    true,
+                    $nameFilterCallbacks
+                );
+
+                $objects = array_merge($objects, $objectsInFolder);
+
+                if (count($objects) > $start + $numberOfItems) {
+                    break;
+                }
+            }
+        }
+
         if ($start !== 0 || $numberOfItems !== 0) {
             $objects = array_slice($objects, $start, $numberOfItems === 0 ? null : $numberOfItems);
         }
