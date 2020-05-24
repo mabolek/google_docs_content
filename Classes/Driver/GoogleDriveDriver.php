@@ -375,7 +375,7 @@ class GoogleDriveDriver extends AbstractHierarchicalFilesystemDriver
             }
         }
 
-        return null;
+        return $this->generateNewId();
     }
 
     /**
@@ -523,7 +523,7 @@ class GoogleDriveDriver extends AbstractHierarchicalFilesystemDriver
             }
         }
 
-        return null;
+        return $this->generateNewId();
     }
 
     public function getFoldersInFolder(
@@ -689,5 +689,21 @@ class GoogleDriveDriver extends AbstractHierarchicalFilesystemDriver
     protected function convertGoogleDateTimeStringToDateTime($dateTimeString): ?\DateTime
     {
         return \DateTime::createFromFormat('Y-m-d\TH:i:s.???\Z', $dateTimeString) ?? null;
+    }
+
+    /**
+     * Returns a new Google file (or folder) ID
+     *
+     * @return string
+     */
+    protected function generateNewId()
+    {
+        $googleClient = $this->googleDriveClient->getClient();
+        $service = new \Google_Service_Drive($googleClient);
+
+        return $service->files->generateIds([
+            'maxResults' => 1,
+            'space' => 'drive'
+        ])['ids'][0];
     }
 }
