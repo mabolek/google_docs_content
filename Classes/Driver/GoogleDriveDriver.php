@@ -364,9 +364,18 @@ class GoogleDriveDriver extends AbstractHierarchicalFilesystemDriver
         return $metaInfo;
     }
 
+    /**
+     * @inheritDoc
+     */
     public function getFileInFolder($fileName, $folderIdentifier)
     {
-        // TODO: Implement getFileInFolder() method.
+        foreach ($this->getFilesInFolder($folderIdentifier) as $file) {
+            if (strcasecmp($fileName, $file['name']) === 0) {
+                return $file['id'];
+            }
+        }
+
+        return null;
     }
 
     /**
@@ -499,9 +508,18 @@ class GoogleDriveDriver extends AbstractHierarchicalFilesystemDriver
         );
     }
 
+    /**
+     * @inheritDoc
+     */
     public function getFolderInFolder($folderName, $folderIdentifier)
     {
-        // TODO: Implement getFolderInFolder() method.
+        foreach ($this->getFoldersInFolder($folderIdentifier) as $folder) {
+            if (strcasecmp($folderName, $folder['name']) === 0) {
+                return $folder['id'];
+            }
+        }
+
+        return null;
     }
 
     public function getFoldersInFolder(
