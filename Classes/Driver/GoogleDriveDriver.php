@@ -347,6 +347,9 @@ class GoogleDriveDriver extends AbstractHierarchicalFilesystemDriver
         return $metaInfo;
     }
 
+    /**
+     * @inheritDoc
+     */
     public function getFolderInfoByIdentifier($folderIdentifier)
     {
         if ($folderIdentifier === '') {
@@ -492,6 +495,9 @@ class GoogleDriveDriver extends AbstractHierarchicalFilesystemDriver
         return $objects;
     }
 
+    /**
+     * @inheritDoc
+     */
     public function getFilesInFolder(
         $folderIdentifier,
         $start = 0,
@@ -526,6 +532,9 @@ class GoogleDriveDriver extends AbstractHierarchicalFilesystemDriver
         return $this->generateNewId();
     }
 
+    /**
+     * @inheritDoc
+     */
     public function getFoldersInFolder(
         $folderIdentifier,
         $start = 0,
@@ -547,6 +556,9 @@ class GoogleDriveDriver extends AbstractHierarchicalFilesystemDriver
         );
     }
 
+    /**
+     * @inheritDoc
+     */
     public function countFilesInFolder($folderIdentifier, $recursive = false, array $filenameFilterCallbacks = [])
     {
         if ($folderIdentifier === '') {
