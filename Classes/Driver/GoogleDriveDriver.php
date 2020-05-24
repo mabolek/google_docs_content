@@ -485,6 +485,10 @@ class GoogleDriveDriver extends AbstractHierarchicalFilesystemDriver
             $objects = array_reverse($objects);
         }
 
+        if ($start !== 0 || $numberOfItems !== 0) {
+            $objects = array_slice($objects, $start, $numberOfItems === 0 ? null : $numberOfItems);
+        }
+
         return $objects;
     }
 
