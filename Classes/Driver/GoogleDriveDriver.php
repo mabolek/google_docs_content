@@ -515,9 +515,6 @@ class GoogleDriveDriver extends AbstractHierarchicalFilesystemDriver
         // Sort manually if we're recursing or if the sorting field is not one of the ones supported by Google natively.
         if (($recursive || !in_array($sort, ['', 'name', 'size', 'tstamp'], true)) && count($objects) > 1) {
             switch ($sort) {
-                case 'rw':
-                    // TODO: Implement permission-based sorting when we implement permissions
-                    break;
                 case 'fileext':
                     usort($objects, function ($a, $b) {
                         return strcmp(
@@ -526,6 +523,8 @@ class GoogleDriveDriver extends AbstractHierarchicalFilesystemDriver
                         );
                     });
                     break;
+                case 'rw':
+                    // TODO: Implement permission-based sorting when we implement permissions
                 default:
                     $sortingKey = self::TYPO3_TO_GOOGLE_FIELDS[$sort];
                     if (!in_array($sortingKey, array_keys($objects[0]))) {
