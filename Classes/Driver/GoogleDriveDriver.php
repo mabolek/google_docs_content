@@ -527,7 +527,7 @@ class GoogleDriveDriver extends AbstractHierarchicalFilesystemDriver
                     });
                     break;
                 default:
-                    $sortingKey = self::TYPO3_TO_GOOGLE_FIELDS[$sortingKey];
+                    $sortingKey = self::TYPO3_TO_GOOGLE_FIELDS[$sort];
                     if (!in_array($sortingKey, array_keys($objects[0]))) {
                         $sortingKey = 'name';
                     }
