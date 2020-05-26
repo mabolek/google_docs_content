@@ -378,13 +378,32 @@ class GoogleDriveDriver extends AbstractHierarchicalFilesystemDriver
      */
     public function getFileInFolder($fileName, $folderIdentifier)
     {
-        foreach ($this->getFilesInFolder($folderIdentifier) as $file) {
-            if (strcasecmp($fileName, $file['name']) === 0) {
-                return $file['id'];
+        return $this->getObjectByNameInFolder($fileName, $folderIdentifier)['id'] ?? $this->generateNewId();
+    }
+
+    /**
+     * @param $name
+     * @param $folderIdentifier
+     * @return mixed|null
+     */
+    protected function getObjectByNameInFolder($name, $folderIdentifier, $isFolder = false)
+    {
+        foreach (
+            $this->getObjectsInFolder(
+                $folderIdentifier,
+                null,
+                null,
+                null,
+                null,
+                null, null,
+                $isFolder
+            ) as $file) {
+            if (strcasecmp($name, $file['name']) === 0) {
+                return $file;
             }
         }
 
-        return $this->generateNewId();
+        return null;
     }
 
     /**
@@ -571,13 +590,8 @@ class GoogleDriveDriver extends AbstractHierarchicalFilesystemDriver
      */
     public function getFolderInFolder($folderName, $folderIdentifier)
     {
-        foreach ($this->getFoldersInFolder($folderIdentifier) as $folder) {
-            if (strcasecmp($folderName, $folder['name']) === 0) {
-                return $folder['id'];
-            }
-        }
-
-        return $this->generateNewId();
+        return $this->getObjectByNameInFolder($folderName, $folderIdentifier, true)['id']
+            ?? $this->generateNewId();
     }
 
     /**
