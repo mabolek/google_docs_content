@@ -234,7 +234,7 @@ class GoogleDriveDriver extends AbstractHierarchicalFilesystemDriver
 
     public function isFolderEmpty($folderIdentifier)
     {
-        return $this->countFilesInFolder($folderIdentifier) + $this->countFoldersInFolder($folderIdentifier) > 0;
+        return $this->countFilesInFolder($folderIdentifier) + $this->countFoldersInFolder($folderIdentifier) === 0;
     }
 
     public function addFile($localFilePath, $targetFolderIdentifier, $newFileName = '', $removeOriginal = true)
