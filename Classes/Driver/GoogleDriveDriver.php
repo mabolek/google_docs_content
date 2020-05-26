@@ -297,11 +297,17 @@ class GoogleDriveDriver extends AbstractHierarchicalFilesystemDriver
         // TODO: Implement setFileContents() method.
     }
 
+    /**
+     * @inheritDoc
+     */
     public function fileExistsInFolder($fileName, $folderIdentifier)
     {
-        // TODO: Implement fileExistsInFolder() method.
+        return $this->getObjectByNameInFolder($fileName, $folderIdentifier) === null ? false : true;
     }
 
+    /**
+     * @inheritDoc
+     */
     public function folderExistsInFolder($folderName, $folderIdentifier)
     {
         return $this->getObjectByNameInFolder($folderName, $folderIdentifier, true) === null ? false : true;
@@ -322,9 +328,29 @@ class GoogleDriveDriver extends AbstractHierarchicalFilesystemDriver
         // TODO: Implement dumpFileContents() method.
     }
 
+    /**
+     * @inheritDoc
+     */
     public function isWithin($folderIdentifier, $identifier)
     {
-        // TODO: Implement isWithin() method.
+        if ($folderIdentifier === $identifier) {
+            return true;
+        }
+
+        foreach ($this->getFilesInFolder($folderIdentifier) as $file) {
+            if ($file['id'] === $identifier) {
+                return true;
+            }
+        }
+
+        // Second foreach to avoid an extra request if previous foreach returned true
+        foreach ($this->getFoldersInFolder($folderIdentifier) as $folder) {
+            if ($folder['id'] === $identifier) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     public function getFileInfoByIdentifier($fileIdentifier, array $propertiesToExtract = [])
