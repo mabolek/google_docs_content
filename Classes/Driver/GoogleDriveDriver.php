@@ -50,7 +50,7 @@ class GoogleDriveDriver extends AbstractHierarchicalFilesystemDriver
      * Object meta data is cached here as array or null
      * $identifier => [meta info as array]
      *
-     * @var array[]
+     * @var array<\Google_Service_Drive_DriveFile>
      */
     protected $metaInfoCache = [];
 
@@ -171,6 +171,11 @@ class GoogleDriveDriver extends AbstractHierarchicalFilesystemDriver
         // TODO: Implement deleteFolder() method.
     }
 
+    /**
+     * @param $identifier
+     * @return \Google_Service_Drive_DriveFile|null
+     * @throws Google_Service_Exception
+     */
     protected function getObjectByIdentifier($identifier)
     {
         if ($identifier === null) {
@@ -287,9 +292,29 @@ class GoogleDriveDriver extends AbstractHierarchicalFilesystemDriver
         // TODO: Implement copyFolderWithinStorage() method.
     }
 
+    /**
+     * @inheritDoc
+     */
     public function getFileContents($fileIdentifier)
     {
-        // TODO: Implement getFileContents() method.
+        $file = $this->getObjectByIdentifier($fileIdentifier);
+
+        switch ($file->getMimeType()) {
+            default:
+                $mimeType = $file->getMimeType();
+                break;
+        }
+
+        $googleClient = $this->googleDriveClient->getClient();
+        $service = new \Google_Service_Drive($googleClient);
+
+        $response = $service->files->export(
+            $fileIdentifier,
+            $mimeType,
+            ['alt' => 'media']
+        );
+
+        return $response->getBody()->getContents() ?? '';
     }
 
     public function setFileContents($fileIdentifier, $contents)
@@ -313,9 +338,42 @@ class GoogleDriveDriver extends AbstractHierarchicalFilesystemDriver
         return $this->getObjectByNameInFolder($folderName, $folderIdentifier, true) === null ? false : true;
     }
 
+    /**
+     * @inheritDoc
+     *
+     * @throws \RuntimeException when copying the file to local filesystem fails
+     */
     public function getFileForLocalProcessing($fileIdentifier, $writable = true)
     {
-        // TODO: Implement getFileForLocalProcessing() method.
+        $temporaryPath = $this->getTemporaryPathForFile($fileIdentifier);
+
+        if (file_put_contents($temporaryPath, $this->getFileContents($fileIdentifier)) === false) {
+            throw new \RuntimeException('Copying file ' . $fileIdentifier . ' to temporary path failed.', 1590526556);
+        }
+
+        $this->emitGetFileForLocalProcessingSignal($fileIdentifier, $temporaryPath, $writable);
+
+        if (!isset($this->temporaryPaths[$temporaryPath])) {
+            $this->temporaryPaths[$temporaryPath] = $temporaryPath;
+        }
+
+        return $temporaryPath;
+    }
+
+    /**
+     * @param string $fileIdentifier
+     * @param string $temporaryPath
+     * @param bool $writable
+     * @throws \TYPO3\CMS\Extbase\SignalSlot\Exception\InvalidSlotException
+     * @throws \TYPO3\CMS\Extbase\SignalSlot\Exception\InvalidSlotReturnException
+     */
+    protected function emitGetFileForLocalProcessingSignal(&$fileIdentifier, &$temporaryPath, &$writable)
+    {
+        list($fileIdentifier, $temporaryPath, $writable) = $this->getSignalSlotDispatcher()->dispatch(
+            self::class,
+            'getFileForLocalProcessing',
+            [$fileIdentifier, $temporaryPath, $writable]
+        );
     }
 
     public function getPermissions($identifier)
@@ -323,9 +381,13 @@ class GoogleDriveDriver extends AbstractHierarchicalFilesystemDriver
         return ['r' => true, 'w' => false];
     }
 
+    /**
+     * @inheritDoc
+     */
     public function dumpFileContents($identifier)
     {
-        // TODO: Implement dumpFileContents() method.
+        echo $this->getFileContents($identifier);
+        exit;
     }
 
     /**
@@ -370,7 +432,8 @@ class GoogleDriveDriver extends AbstractHierarchicalFilesystemDriver
             'folder_hash' => $this->hashIdentifier($record['parents'][0]['id'] ?? 'root'),
             'extension' => PathUtility::pathinfo($record['name'], PATHINFO_EXTENSION),
             'storage' => $this->storageUid,
-            'size' => $record['quotaBytesUsed']
+            'size' => $record['quotaBytesUsed'],
+            'mimetype' => $record['mimeType'],
         ];
 
         if (count($propertiesToExtract) > 0) {
