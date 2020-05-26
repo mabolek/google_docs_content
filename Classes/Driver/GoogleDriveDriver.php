@@ -5,6 +5,7 @@ namespace GeorgRinger\GoogleDocsContent\Driver;
 
 
 use GeorgRinger\GoogleDocsContent\Api\Client;
+use Google_Service_Exception;
 use GuzzleHttp\Psr7\StreamWrapper;
 use TYPO3\CMS\Core\Resource\Driver\AbstractHierarchicalFilesystemDriver;
 use TYPO3\CMS\Core\Resource\Exception\InsufficientFolderAccessPermissionsException;
@@ -303,7 +304,7 @@ class GoogleDriveDriver extends AbstractHierarchicalFilesystemDriver
 
     public function folderExistsInFolder($folderName, $folderIdentifier)
     {
-        // TODO: Implement folderExistsInFolder() method.
+        return $this->getObjectByNameInFolder($folderName, $folderIdentifier, true) === null ? false : true;
     }
 
     public function getFileForLocalProcessing($fileIdentifier, $writable = true)
@@ -463,8 +464,15 @@ class GoogleDriveDriver extends AbstractHierarchicalFilesystemDriver
 
             $records = [];
             do {
-                $fileList = $service->files->listFiles($parameters);
-                $fileRecords = $fileList->getFiles();
+                try {
+                    $fileList = $service->files->listFiles($parameters);
+                    $fileRecords = $fileList->getFiles();
+                } catch (Google_Service_Exception $e) {
+                    if ($e->getCode() === 404) {
+                        break;
+                    }
+                }
+
 
                 foreach ($fileRecords as $fileRecord) {
                     $records[] = $fileRecord;
