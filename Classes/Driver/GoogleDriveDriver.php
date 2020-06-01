@@ -12,6 +12,7 @@ use TYPO3\CMS\Core\Resource\Exception\InsufficientFolderAccessPermissionsExcepti
 use TYPO3\CMS\Core\Resource\Exception\ResourceDoesNotExistException;
 use TYPO3\CMS\Core\Resource\ResourceStorage;
 use TYPO3\CMS\Core\Utility\ArrayUtility;
+use TYPO3\CMS\Core\Utility\GeneralUtility;
 use TYPO3\CMS\Core\Utility\PathUtility;
 
 class GoogleDriveDriver extends AbstractHierarchicalFilesystemDriver
@@ -299,20 +300,23 @@ class GoogleDriveDriver extends AbstractHierarchicalFilesystemDriver
     {
         $file = $this->getObjectByIdentifier($fileIdentifier);
 
-        switch ($file->getMimeType()) {
-            default:
-                $mimeType = $file->getMimeType();
-                break;
-        }
-
         $googleClient = $this->googleDriveClient->getClient();
         $service = new \Google_Service_Drive($googleClient);
 
-        $response = $service->files->export(
-            $fileIdentifier,
-            $mimeType,
-            ['alt' => 'media']
-        );
+        switch ($file['mimeType']) {
+            case 'application/vnd.google-apps.document':
+            case 'application/vnd.google-apps.spreadsheet':
+            case 'application/vnd.google-apps.presentation':
+                $response = $service->files->export(
+                    $fileIdentifier,
+                    $mimeType,
+                    ['alt' => 'media']
+                );
+                break;
+            default:
+                $response = $service->files->get($fileIdentifier, ['alt' => 'media']);
+                break;
+        }
 
         return $response->getBody()->getContents() ?? '';
     }
@@ -351,8 +355,6 @@ class GoogleDriveDriver extends AbstractHierarchicalFilesystemDriver
             throw new \RuntimeException('Copying file ' . $fileIdentifier . ' to temporary path failed.', 1590526556);
         }
 
-        $this->emitGetFileForLocalProcessingSignal($fileIdentifier, $temporaryPath, $writable);
-
         if (!isset($this->temporaryPaths[$temporaryPath])) {
             $this->temporaryPaths[$temporaryPath] = $temporaryPath;
         }
@@ -361,19 +363,14 @@ class GoogleDriveDriver extends AbstractHierarchicalFilesystemDriver
     }
 
     /**
+     * Returns a temporary path for a given file, including the file extension.
+     *
      * @param string $fileIdentifier
-     * @param string $temporaryPath
-     * @param bool $writable
-     * @throws \TYPO3\CMS\Extbase\SignalSlot\Exception\InvalidSlotException
-     * @throws \TYPO3\CMS\Extbase\SignalSlot\Exception\InvalidSlotReturnException
+     * @return string
      */
-    protected function emitGetFileForLocalProcessingSignal(&$fileIdentifier, &$temporaryPath, &$writable)
+    protected function getTemporaryPathForFile($fileIdentifier)
     {
-        list($fileIdentifier, $temporaryPath, $writable) = $this->getSignalSlotDispatcher()->dispatch(
-            self::class,
-            'getFileForLocalProcessing',
-            [$fileIdentifier, $temporaryPath, $writable]
-        );
+        return GeneralUtility::tempnam('fal-tempfile-', '.' . PathUtility::pathinfo($this->getObjectByIdentifier($fileIdentifier)['name'], PATHINFO_EXTENSION));
     }
 
     public function getPermissions($identifier)
