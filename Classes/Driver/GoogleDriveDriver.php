@@ -28,6 +28,35 @@ class GoogleDriveDriver extends AbstractHierarchicalFilesystemDriver
         'tstamp' => 'modifiedTime',
     ];
 
+    const GOOGLE_MIME_TYPE_TO_EXTENSIONS_AND_EXPORT_FORMATS = [
+        'application/vnd.google-apps.document' => [
+            'html' => 'text/html',
+            'zip' => 'application/zip',
+            'txt' => 'text/plain',
+            'rtf' => 'application/rtf',
+            'odt' => 'application/vnd.oasis.opendocument.text',
+            'pdf' => 'application/pdf',
+            'docx' => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            'epub' => 'application/epub+zip',
+        ],
+        'application/vnd.google-apps.spreadsheet' => [
+            'xlsx' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'ods' => 'application/x-vnd.oasis.opendocument.spreadsheet',
+        ],
+        'application/vnd.google-apps.drawing' => [
+            'jpg' => 'image/jpeg',
+            'png' => 'image/png',
+            'svg' => 'image/svg+xml',
+            'pdf' => 'application/pdf',
+        ],
+        'application/vnd.google-apps.presentation' => [
+            'pptx' => 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+            'odp' => 'application/vnd.oasis.opendocument.presentation',
+            'pdf' => 'application/pdf',
+            'txt' => 'text/plain',
+        ],
+    ];
+
     /**
      * @var Client
      */
@@ -191,11 +220,16 @@ class GoogleDriveDriver extends AbstractHierarchicalFilesystemDriver
             return $this->metaInfoCache[$identifier];
         }
 
+        $identifierExtension = null;
+        if (strpos('.', $identifier) !== false) {
+            list($identifier, $identifierExtension) = explode('.', $identifier);
+        }
+
         $googleClient = $this->googleDriveClient->getClient();
         $service = new \Google_Service_Drive($googleClient);
 
         try {
-            $record = $service->files->get($identifier, ['fields' => 'createdTime,id,mimeType,modifiedTime,name,parents,size,quotaBytesUsed']);
+            $record = (array)$service->files->get($identifier, ['fields' => 'createdTime,id,mimeType,modifiedTime,name,parents,size,quotaBytesUsed']);
         } catch (\Google_Service_Exception $e) {
             if ($e->getCode() === 404) {
                 return null;
@@ -204,13 +238,56 @@ class GoogleDriveDriver extends AbstractHierarchicalFilesystemDriver
             throw $e;
         }
 
-        if (!$record instanceof \Google_Service_Drive_DriveFile) {
+        if (!is_array($record)) {
             return null;
         }
 
-        $this->metaInfoCache[$identifier] = $record;
+        if ($identifierExtension) {
+            $records = $this->getExportFormatObjects($record);
+
+            $record = null;
+
+            foreach ($records as $exportFormatRecord) {
+                $identfierWithExtension = $identifier . '.' . $identifierExtension;
+                if ($exportFormatRecord['id'] === $identfierWithExtension) {
+                    $record = $exportFormatRecord;
+                }
+
+                $this->metaInfoCache[$identfierWithExtension] = $exportFormatRecord;
+            }
+        } else {
+            $this->metaInfoCache[$identifier] = $record;
+        }
 
         return $record;
+    }
+
+    /**
+     * Returns an array of virtual file system objects representing available export formats for google docs
+     *
+     * @param $object
+     * @return array
+     */
+    protected function getExportFormatObjects($object)
+    {
+        if (!isset(self::GOOGLE_MIME_TYPE_TO_EXTENSIONS_AND_EXPORT_FORMATS[$object['mimeType']])) {
+            return [$object];
+        }
+
+        $exportFormatObjects = [];
+
+        foreach (self::GOOGLE_MIME_TYPE_TO_EXTENSIONS_AND_EXPORT_FORMATS[$object['mimeType']] as $extension => $exportFormat) {
+            $exportFormatObject = $object;
+
+            $exportFormatObject['originalMimeType'] = $object['mimeType'];
+            $exportFormatObject['mimeType'] = $exportFormat;
+            $exportFormatObject['id'] = $object['id'] . '.' . $extension;
+            $exportFormatObject['name'] = $object['name'] . '.' . $extension;
+
+            $exportFormatObjects[] = $exportFormatObject;
+        }
+
+        return $exportFormatObjects;
     }
 
     protected function objectExists($identifier, bool $isFolder = false)
@@ -523,9 +600,9 @@ class GoogleDriveDriver extends AbstractHierarchicalFilesystemDriver
         $isFolder = false
     )
     {
-        if ($folderIdentifier === '' && $isFolder === true) {
+        if ($folderIdentifier === null && $isFolder === true) {
             $folderIdentifier = $this->getRootLevelFolder();
-        } elseif ($folderIdentifier === '') {
+        } elseif ($folderIdentifier === '' || $folderIdentifier === null) {
             return [];
         }
 
@@ -561,15 +638,25 @@ class GoogleDriveDriver extends AbstractHierarchicalFilesystemDriver
 
 
                 foreach ($fileRecords as $fileRecord) {
-                    $records[] = $fileRecord;
+                    $records[] = (array)$fileRecord;
                 }
 
                 $parameters['pageToken'] = $fileList->getNextPageToken();
             } while($parameters['pageToken'] !== null);
 
+            $newRecordsArray = [];
+
             foreach ($records as $record) {
-                $this->metaInfoCache[$record->id] = $record;
+                $exportFormatObjects = $this->getExportFormatObjects($record);
+
+                foreach ($exportFormatObjects as $exportFormatObject) {
+                    $this->metaInfoCache[$exportFormatObject['id']] = $exportFormatObject;
+                }
+
+                $newRecordsArray = array_merge($newRecordsArray, $exportFormatObjects);
             }
+
+            $records = $newRecordsArray;
 
             $this->listQueryCache[$parametersHash] = $records;
         }
@@ -588,7 +675,7 @@ class GoogleDriveDriver extends AbstractHierarchicalFilesystemDriver
                 continue;
             }
 
-            $objects[$record->id] = $record->id;
+            $objects[$record['id']] = $record['id'];
         }
 
         if ($recursive && count($objects) <= $start + $numberOfItems) {
@@ -740,7 +827,7 @@ class GoogleDriveDriver extends AbstractHierarchicalFilesystemDriver
     public function getParentFolderIdentifierOfIdentifier($identifier)
     {
         if ($identifier === $this->getRootLevelFolder()) {
-            throw new ResourceDoesNotExistException();
+            return $identifier;
         }
 
         $record = $this->getObjectByIdentifier($identifier);
