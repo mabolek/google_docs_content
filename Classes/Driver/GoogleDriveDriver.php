@@ -71,34 +71,19 @@ class GoogleDriveDriver extends AbstractHierarchicalFilesystemDriver
     protected $streamWrapperProtocol = '';
 
     /**
-     * The identifier map used for renaming
-     *
-     * @var array
-     */
-    protected $identifierMap = [];
-
-    /**
      * Object meta data is cached here as array or null
      * $identifier => [meta info as array]
      *
      * @var array<\Google_Service_Drive_DriveFile>
      */
-    protected $metaInfoCache = [];
+    protected static $metaInfoCache = [];
 
     /**
      * Array of list queries
      *
      * @var array[]
      */
-    protected $listQueryCache = [];
-
-    /**
-     * Object permissions are cached here in subarrays like:
-     * $identifier => ['r' => bool, 'w' => bool]
-     *
-     * @var array
-     */
-    protected $objectPermissionsCache = [];
+    protected static $listQueryCache = [];
 
     /**
      * Processing folder
@@ -129,9 +114,24 @@ class GoogleDriveDriver extends AbstractHierarchicalFilesystemDriver
      *
      * @var array
      */
-    protected $additionalFields = [
-        //'fields' => ['createdTime'=>'','id'=>'','mimeType'=>'','modifiedTime'=>'','name'=>'','parents'=>'','size'=>'']
-        'fields' => 'files/createdTime,files/id,files/mimeType,files/modifiedTime,files/name,files/parents,files/size,files/quotaBytesUsed'
+    protected $fileFields = [
+        'createdTime',
+        'id',
+        'mimeType',
+        'modifiedTime',
+        'name',
+        'parents',
+        'size',
+        'quotaBytesUsed',
+        'capabilities/canAddChildren',
+        'capabilities/canCopy',
+        'capabilities/canDelete',
+        'capabilities/canDownload',
+        'capabilities/canEdit',
+        'capabilities/canListChildren',
+        'capabilities/canRemoveChildren',
+        'capabilities/canRename',
+        'capabilities/canTrash',
     ];
 
     /**
@@ -230,7 +230,9 @@ class GoogleDriveDriver extends AbstractHierarchicalFilesystemDriver
         $service = new \Google_Service_Drive($googleClient);
 
         try {
-            $record = (array)$service->files->get($identifier, ['fields' => 'createdTime,id,mimeType,modifiedTime,name,parents,size,quotaBytesUsed']);
+            $record = $service->files->get($identifier, ['fields' => $this->getFileFields()]);
+            $record['capabilities'] = (array)$record->getCapabilities();
+            $record = (array)$record;
         } catch (\Google_Service_Exception $e) {
             if ($e->getCode() === 404) {
                 return null;
@@ -473,7 +475,25 @@ class GoogleDriveDriver extends AbstractHierarchicalFilesystemDriver
 
     public function getPermissions($identifier)
     {
-        return ['r' => true, 'w' => false];
+        $capabilities = $this->getObjectByIdentifier($identifier)['capabilities'];
+
+        //This is a very general implementation, but TYPO3 doesn't have other permissions than R and W.
+        $r = $capabilities['canDownload']
+            || $capabilities['canListChildren'];
+
+        $w = $capabilities['canAddChildren']
+            || $capabilities['canCopy']
+            || $capabilities['canDelete']
+            || $capabilities['canEdit']
+            || $capabilities['canRemoveChildren']
+            || $capabilities['canRename']
+            || $capabilities['canTrash'];
+
+        if ($this->identifierIsExportFormatRepresentation($identifier)) {
+            return ['r' => $r, 'w' => false];
+        }
+
+        return ['r' => $r, 'w' => $w];
     }
 
     /**
@@ -627,7 +647,7 @@ class GoogleDriveDriver extends AbstractHierarchicalFilesystemDriver
             return [];
         }
 
-        $parameters = $this->additionalFields;
+        $parameters['fields'] = $this->getFileFields('files');
         $parameters['q'] = ' \'' . $folderIdentifier . '\' in parents and trashed = false and ';
         if (!$isFolder) {
             $parameters['q'] .= ' not ';
@@ -657,8 +677,8 @@ class GoogleDriveDriver extends AbstractHierarchicalFilesystemDriver
                     }
                 }
 
-
                 foreach ($fileRecords as $fileRecord) {
+                    $fileRecord['capabilities'] = (array)$fileRecord->getCapabilities();
                     $records[] = (array)$fileRecord;
                 }
 
@@ -949,6 +969,23 @@ class GoogleDriveDriver extends AbstractHierarchicalFilesystemDriver
             'maxResults' => 1,
             'space' => 'drive'
         ])['ids'][0];
+    }
+
+    /**
+     * Returns the comma separated list of file fields, with possible prefix, to be returned by Google
+     *
+     * @param string $prefix
+     * @return string
+     */
+    public function getFileFields(string $prefix = ''): string
+    {
+        $fileFields = $this->fileFields;
+
+        if ($prefix !== '') {
+            $fileFields = preg_filter('/^/', $prefix . '/', $fileFields);
+        }
+
+        return implode(',', $fileFields);
     }
 
     /**
