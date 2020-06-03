@@ -8,6 +8,7 @@ use GeorgRinger\GoogleDocsContent\Api\Client;
 use Google_Service_Exception;
 use GuzzleHttp\Psr7\StreamWrapper;
 use TYPO3\CMS\Core\Resource\Driver\AbstractHierarchicalFilesystemDriver;
+use TYPO3\CMS\Core\Resource\Exception\FileDoesNotExistException;
 use TYPO3\CMS\Core\Resource\Exception\InsufficientFolderAccessPermissionsException;
 use TYPO3\CMS\Core\Resource\Exception\ResourceDoesNotExistException;
 use TYPO3\CMS\Core\Resource\ResourceStorage;
@@ -221,7 +222,7 @@ class GoogleDriveDriver extends AbstractHierarchicalFilesystemDriver
         }
 
         $identifierExtension = null;
-        if (strpos('.', $identifier) !== false) {
+        if ($this->identifierIsExportFormatRepresentation($identifier)) {
             list($identifier, $identifierExtension) = explode('.', $identifier);
         }
 
@@ -380,19 +381,27 @@ class GoogleDriveDriver extends AbstractHierarchicalFilesystemDriver
         $googleClient = $this->googleDriveClient->getClient();
         $service = new \Google_Service_Drive($googleClient);
 
-        switch ($file['mimeType']) {
-            case 'application/vnd.google-apps.document':
-            case 'application/vnd.google-apps.spreadsheet':
-            case 'application/vnd.google-apps.presentation':
-                $response = $service->files->export(
-                    $fileIdentifier,
-                    $mimeType,
-                    ['alt' => 'media']
+        if ($this->identifierIsExportFormatRepresentation($fileIdentifier)) {
+            list($identifier, $identifierExtension) = explode('.', $fileIdentifier);
+
+            if (
+            !isset(self::GOOGLE_MIME_TYPE_TO_EXTENSIONS_AND_EXPORT_FORMATS
+                [$file['originalMimeType']][$identifierExtension])
+            ) {
+                throw new FileDoesNotExistException(
+                    'The export mime type for ID "' . $fileIdentifier . '" does not exist.',
+                    1591211438
                 );
-                break;
-            default:
-                $response = $service->files->get($fileIdentifier, ['alt' => 'media']);
-                break;
+            }
+
+            $response = $service->files->export(
+                $identifier,
+                self::GOOGLE_MIME_TYPE_TO_EXTENSIONS_AND_EXPORT_FORMATS
+                [$file['originalMimeType']][$identifierExtension],
+                ['alt' => 'media']
+            );
+        } else {
+            $response = $service->files->get($fileIdentifier, ['alt' => 'media']);
         }
 
         return $response->getBody()->getContents() ?? '';
@@ -447,7 +456,19 @@ class GoogleDriveDriver extends AbstractHierarchicalFilesystemDriver
      */
     protected function getTemporaryPathForFile($fileIdentifier)
     {
-        return GeneralUtility::tempnam('fal-tempfile-', '.' . PathUtility::pathinfo($this->getObjectByIdentifier($fileIdentifier)['name'], PATHINFO_EXTENSION));
+        if ($this->identifierIsExportFormatRepresentation($fileIdentifier)) {
+            $extension = PathUtility::pathinfo(
+                $fileIdentifier,
+                PATHINFO_EXTENSION
+            );
+        } else {
+            $extension = PathUtility::pathinfo(
+                $this->getObjectByIdentifier($fileIdentifier)['name'],
+                PATHINFO_EXTENSION
+            );
+        }
+
+        return GeneralUtility::tempnam('fal-tempfile-', '.' . $extension);
     }
 
     public function getPermissions($identifier)
@@ -928,5 +949,16 @@ class GoogleDriveDriver extends AbstractHierarchicalFilesystemDriver
             'maxResults' => 1,
             'space' => 'drive'
         ])['ids'][0];
+    }
+
+    /**
+     * Returns true if the supplied identifier isn't "real", but a google document, spreadsheet, etc. export format.
+     *
+     * @param $identifier
+     * @return bool
+     */
+    protected function identifierIsExportFormatRepresentation($identifier)
+    {
+        return strpos($identifier, '.') !== false;
     }
 }
