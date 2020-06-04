@@ -348,9 +348,12 @@ class GoogleDriveDriver extends AbstractHierarchicalFilesystemDriver
         // TODO: Implement renameFile() method.
     }
 
+    /**
+     * @inheritDoc
+     */
     public function replaceFile($fileIdentifier, $localFilePath)
     {
-        // TODO: Implement replaceFile() method.
+        return $this->setFileContents($fileIdentifier, file_get_contents($localFilePath)) > 0;
     }
 
     public function deleteFile($fileIdentifier)
@@ -413,13 +416,30 @@ class GoogleDriveDriver extends AbstractHierarchicalFilesystemDriver
         return $response->getBody()->getContents() ?? '';
     }
 
+    /**
+     * @inheritDoc
+     */
     public function setFileContents($fileIdentifier, $contents)
     {
-        if (!$this->getObjectByIdentifier($fileIdentifier)['capabilities']['canEdit']) {
+        if (
+            !$this->getObjectByIdentifier($fileIdentifier)['capabilities']['canEdit']
+            || $this->identifierIsExportFormatRepresentation($fileIdentifier)
+            || $contents === ''
+        ) {
             return 0;
         }
 
+        $service = $this->getGoogleDriveService();
 
+        $file = $service->files->get($fileIdentifier);
+
+        $service->files->update(
+            $fileIdentifier,
+            $file,
+            ['data' => $contents]
+        );
+
+        return mb_strlen($contents, '8bit');
     }
 
     /**
