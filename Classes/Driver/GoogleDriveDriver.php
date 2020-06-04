@@ -473,6 +473,9 @@ class GoogleDriveDriver extends AbstractHierarchicalFilesystemDriver
         return GeneralUtility::tempnam('fal-tempfile-', '.' . $extension);
     }
 
+    /**
+     * @inheritDoc
+     */
     public function getPermissions($identifier)
     {
         $capabilities = $this->getObjectByIdentifier($identifier)['capabilities'];
