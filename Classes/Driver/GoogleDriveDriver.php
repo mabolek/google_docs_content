@@ -625,7 +625,7 @@ class GoogleDriveDriver extends AbstractHierarchicalFilesystemDriver
     protected function getObjectByNameInFolder($name, $folderIdentifier, $isFolder = false)
     {
         foreach (
-            $this->getObjectsInFolder(
+            $this->getRecordsInFolder(
                 $folderIdentifier,
                 null,
                 null,
