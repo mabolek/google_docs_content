@@ -610,8 +610,9 @@ class GoogleDriveDriver extends AbstractHierarchicalFilesystemDriver
                 null,
                 null,
                 null,
+                [],
                 null,
-                null, null,
+                null,
                 $isFolder
             ) as $file) {
             if (strcasecmp($name, $file['name']) === 0) {
@@ -652,6 +653,91 @@ class GoogleDriveDriver extends AbstractHierarchicalFilesystemDriver
         $isFolder = false
     )
     {
+        $records = $this->getRecordsInFolder(
+            $folderIdentifier,
+            $start,
+            $numberOfItems,
+            $recursive,
+            $nameFilterCallbacks,
+            $sort,
+            $sortRev,
+            $isFolder
+        );
+
+        if ($start !== 0 || $numberOfItems !== 0) {
+            $records = array_slice($records, $start, $numberOfItems === 0 ? null : $numberOfItems);
+        }
+
+        // Sort manually if we're recursing or if the sorting field is not one of the ones supported by Google natively.
+        if (
+            $sort !== null
+            && ($recursive || !in_array($sort, ['', 'name', 'size', 'tstamp'], true))
+            && count($records) > 1
+        ) {
+            switch ($sort) {
+                case 'fileext':
+                    usort($records, function ($a, $b) {
+                        return strcmp(
+                            pathinfo($a['name'], PATHINFO_EXTENSION),
+                            pathinfo($b['name'], PATHINFO_EXTENSION)
+                        );
+                    });
+                    break;
+                case 'rw':
+                    // TODO: Implement permission-based sorting when we implement permissions
+                default:
+                    $sortingKey = self::TYPO3_TO_GOOGLE_FIELDS[$sort];
+                    if ($sortingKey === null || !in_array($sortingKey, array_keys($records[0]))) {
+                        $sortingKey = 'name';
+                    }
+                    $records = ArrayUtility::sortArraysByKey($records, $sortingKey);
+                    break;
+            }
+
+        }
+
+        $objects = [];
+
+        foreach ($records as $record) {
+            $objects[$record['id']] = $record['id'];
+        }
+
+        if ($sortRev && count($objects) > 1) {
+            $objects = array_reverse($objects);
+        }
+
+        return $objects;
+    }
+
+    /**
+     * Get file or folder records within a folder
+     *
+     * Returns file or folder records inside the specified path
+     *
+     * @param string $folderIdentifier
+     * @param int $start
+     * @param int $numberOfItems
+     * @param bool $recursive
+     * @param array $nameFilterCallbacks callbacks for filtering the items
+     * @param string $sort Property name used to sort the items.
+     *                     Among them may be: '' (empty, no sorting), name,
+     *                     fileext, size, tstamp and rw.
+     *                     If a driver does not support the given property, it
+     *                     should fall back to "name".
+     * @param bool $sortRev TRUE to indicate reverse sorting (last to first)
+     * @param bool $isFolder Returns a list of folders if true. Otherwise, files.
+     * @return array of file record arrays
+     */
+    protected function getRecordsInFolder(
+        $folderIdentifier,
+        $start = 0,
+        $numberOfItems = 0,
+        $recursive = false,
+        array $nameFilterCallbacks = [],
+        $sort = '',
+        $sortRev = false,
+        $isFolder = false)
+    {
         if ($folderIdentifier === null && $isFolder === true) {
             $folderIdentifier = $this->getRootLevelFolder();
         } elseif ($folderIdentifier === '' || $folderIdentifier === null) {
@@ -671,8 +757,8 @@ class GoogleDriveDriver extends AbstractHierarchicalFilesystemDriver
 
         $parametersHash = md5(serialize($parameters));
 
-        if (isset($this->listQueryCache[$parametersHash])) {
-            $records = $this->listQueryCache[$parametersHash];
+        if (isset(self::$listQueryCache[$parametersHash])) {
+            $records = self::$listQueryCache[$parametersHash];
         } else {
             $service = $this->getGoogleDriveService();
 
@@ -701,7 +787,7 @@ class GoogleDriveDriver extends AbstractHierarchicalFilesystemDriver
                 $exportFormatObjects = $this->getExportFormatObjects($record);
 
                 foreach ($exportFormatObjects as $exportFormatObject) {
-                    $this->metaInfoCache[$exportFormatObject['id']] = $exportFormatObject;
+                    self::$metaInfoCache[$exportFormatObject['id']] = $exportFormatObject;
                 }
 
                 $newRecordsArray = array_merge($newRecordsArray, $exportFormatObjects);
@@ -709,89 +795,56 @@ class GoogleDriveDriver extends AbstractHierarchicalFilesystemDriver
 
             $records = $newRecordsArray;
 
-            $this->listQueryCache[$parametersHash] = $records;
+            self::$listQueryCache[$parametersHash] = $records;
         }
-
-        $objects = [];
 
         foreach ($records as $record) {
             if (
-                !$this->applyFilterMethodsToDirectoryItem(
-                    $nameFilterCallbacks,
-                    $record['name'],
-                    $record['id'],
-                    $folderIdentifier
-                )
+            !$this->applyFilterMethodsToDirectoryItem(
+                $nameFilterCallbacks,
+                $record['name'],
+                $record['id'],
+                $folderIdentifier
+            )
             ) {
                 continue;
             }
-
-            $objects[$record['id']] = $record['id'];
         }
 
-        if ($recursive && count($objects) <= $start + $numberOfItems) {
+        if ($recursive && count($records) <= $start + $numberOfItems) {
             if ($isFolder) {
-                $folders = $objects;
+                $folders = $records;
             } else {
-                $folders = $this->getFoldersInFolder(
+                $folders = $this->getRecordsInFolder(
                     $folderIdentifier,
                     0,
                     0,
+                    true,
+                    $nameFilterCallbacks,
+                    '',
                     false,
-                    $nameFilterCallbacks
+                    true
                 );
             }
 
             foreach ($folders as $folder) {
-                $objectsInFolder = $this->getObjectsInFolder(
+                $recordsInFolder = $this->getObjectsInFolder(
                     $folder['id'],
                     0,
-                    $start + $numberOfItems - count($objects),
+                    $start + $numberOfItems - count($records),
                     true,
                     $nameFilterCallbacks
                 );
 
-                $objects = array_merge($objects, $objectsInFolder);
+                $records = array_merge($records, $recordsInFolder);
 
-                if (count($objects) > $start + $numberOfItems) {
+                if (count($records) > $start + $numberOfItems) {
                     break;
                 }
             }
         }
 
-        if ($start !== 0 || $numberOfItems !== 0) {
-            $objects = array_slice($objects, $start, $numberOfItems === 0 ? null : $numberOfItems);
-        }
-
-        // Sort manually if we're recursing or if the sorting field is not one of the ones supported by Google natively.
-        if (($recursive || !in_array($sort, ['', 'name', 'size', 'tstamp'], true)) && count($objects) > 1) {
-            switch ($sort) {
-                case 'fileext':
-                    usort($objects, function ($a, $b) {
-                        return strcmp(
-                            pathinfo($a, PATHINFO_EXTENSION),
-                            pathinfo($b, PATHINFO_EXTENSION)
-                        );
-                    });
-                    break;
-                case 'rw':
-                    // TODO: Implement permission-based sorting when we implement permissions
-                default:
-                    $sortingKey = self::TYPO3_TO_GOOGLE_FIELDS[$sort];
-                    if (!in_array($sortingKey, array_keys($objects[0]))) {
-                        $sortingKey = 'name';
-                    }
-                    $objects = ArrayUtility::sortArraysByKey($objects, $sortingKey);
-                    break;
-            }
-
-        }
-
-        if ($sortRev && count($objects) > 1) {
-            $objects = array_reverse($objects);
-        }
-
-        return $objects;
+        return $records;
     }
 
     /**
