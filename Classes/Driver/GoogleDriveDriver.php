@@ -64,6 +64,11 @@ class GoogleDriveDriver extends AbstractHierarchicalFilesystemDriver
     protected $googleDriveClient = null;
 
     /**
+     * @var \Google_Service_Drive
+     */
+    protected $googleDriveService = null;
+
+    /**
      * Stream wrapper protocol: Will be set in the constructor
      *
      * @var string
@@ -380,8 +385,7 @@ class GoogleDriveDriver extends AbstractHierarchicalFilesystemDriver
     {
         $file = $this->getObjectByIdentifier($fileIdentifier);
 
-        $googleClient = $this->googleDriveClient->getClient();
-        $service = new \Google_Service_Drive($googleClient);
+        $service = $this->getGoogleDriveService();
 
         if ($this->identifierIsExportFormatRepresentation($fileIdentifier)) {
             list($identifier, $identifierExtension) = explode('.', $fileIdentifier);
@@ -411,7 +415,11 @@ class GoogleDriveDriver extends AbstractHierarchicalFilesystemDriver
 
     public function setFileContents($fileIdentifier, $contents)
     {
-        // TODO: Implement setFileContents() method.
+        if (!$this->getObjectByIdentifier($fileIdentifier)['capabilities']['canEdit']) {
+            return 0;
+        }
+
+
     }
 
     /**
@@ -666,8 +674,7 @@ class GoogleDriveDriver extends AbstractHierarchicalFilesystemDriver
         if (isset($this->listQueryCache[$parametersHash])) {
             $records = $this->listQueryCache[$parametersHash];
         } else {
-            $googleClient = $this->googleDriveClient->getClient();
-            $service = new \Google_Service_Drive($googleClient);
+            $service = $this->getGoogleDriveService();
 
             $records = [];
             do {
@@ -965,8 +972,7 @@ class GoogleDriveDriver extends AbstractHierarchicalFilesystemDriver
      */
     protected function generateNewId()
     {
-        $googleClient = $this->googleDriveClient->getClient();
-        $service = new \Google_Service_Drive($googleClient);
+        $service = $this->getGoogleDriveService();
 
         return $service->files->generateIds([
             'maxResults' => 1,
@@ -989,6 +995,24 @@ class GoogleDriveDriver extends AbstractHierarchicalFilesystemDriver
         }
 
         return implode(',', $fileFields);
+    }
+
+    /**
+     * Returns the google drive service
+     *
+     * @return \Google_Service_Drive|null
+     */
+    protected function getGoogleDriveService(): ?\Google_Service_Drive
+    {
+        if ($this->googleDriveService !== null) {
+            return $this->googleDriveService;
+        }
+
+        if ($this->googleDriveClient === null) {
+            return null;
+        }
+
+        return new \Google_Service_Drive($this->googleDriveClient->getClient());
     }
 
     /**
