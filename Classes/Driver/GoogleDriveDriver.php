@@ -9,12 +9,14 @@ use Google_Service_Exception;
 use GuzzleHttp\Psr7\StreamWrapper;
 use TYPO3\CMS\Core\Resource\Driver\AbstractHierarchicalFilesystemDriver;
 use TYPO3\CMS\Core\Resource\Exception\FileDoesNotExistException;
+use TYPO3\CMS\Core\Resource\Exception\FileOperationErrorException;
 use TYPO3\CMS\Core\Resource\Exception\InsufficientFolderAccessPermissionsException;
 use TYPO3\CMS\Core\Resource\Exception\ResourceDoesNotExistException;
 use TYPO3\CMS\Core\Resource\ResourceStorage;
 use TYPO3\CMS\Core\Utility\ArrayUtility;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 use TYPO3\CMS\Core\Utility\PathUtility;
+use TYPO3\CMS\Form\Mvc\Configuration\Exception\FileWriteException;
 
 class GoogleDriveDriver extends AbstractHierarchicalFilesystemDriver
 {
@@ -431,13 +433,24 @@ class GoogleDriveDriver extends AbstractHierarchicalFilesystemDriver
 
         $service = $this->getGoogleDriveService();
 
-        $file = $service->files->get($fileIdentifier);
+        $file = new \Google_Service_Drive_DriveFile(); //$service->files->get($fileIdentifier);
 
-        $service->files->update(
-            $fileIdentifier,
-            $file,
-            ['data' => $contents]
-        );
+        try {
+            $service->files->update(
+                $fileIdentifier,
+                $file,
+                [
+                    'data' => $contents,
+                    'uploadType' => 'media'
+                ]
+            );
+        } catch (\Google_Service_Exception $e) {
+            throw new FileOperationErrorException(
+                'Could not write file ID "' . $fileIdentifier . '" due to a Google_Service_Exception: '
+                . $e->getMessage() . ' (' . $e->getCode() . ')',
+                1591380094
+            );
+        }
 
         return mb_strlen($contents, '8bit');
     }
