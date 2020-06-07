@@ -11,6 +11,7 @@ use TYPO3\CMS\Core\Resource\Driver\AbstractHierarchicalFilesystemDriver;
 use TYPO3\CMS\Core\Resource\Exception\FileDoesNotExistException;
 use TYPO3\CMS\Core\Resource\Exception\FileOperationErrorException;
 use TYPO3\CMS\Core\Resource\Exception\InsufficientFolderAccessPermissionsException;
+use TYPO3\CMS\Core\Resource\Exception\InvalidPathException;
 use TYPO3\CMS\Core\Resource\Exception\ResourceDoesNotExistException;
 use TYPO3\CMS\Core\Resource\ResourceStorage;
 use TYPO3\CMS\Core\Utility\ArrayUtility;
@@ -25,6 +26,8 @@ class GoogleDriveDriver extends AbstractHierarchicalFilesystemDriver
     const EXTENSION_KEY = 'google_docs_content';
 
     const EXTENSION_NAME = 'Google Docs Content';
+
+    const IDENTIFIER_PATTERN = '/[a-zA-Z0-9-_]+/';
 
     const TYPO3_TO_GOOGLE_FIELDS = [
         'size' => 'quotaBytesUsed',
@@ -308,7 +311,10 @@ class GoogleDriveDriver extends AbstractHierarchicalFilesystemDriver
             return false;
         }
 
-        if (!$isFolder || ($isFolder && $record['mimeType'] === 'application/vnd.google-apps.folder')) {
+        if (
+            (!$isFolder && $record['mimeType'] !== 'application/vnd.google-apps.folder')
+            || ($isFolder && $record['mimeType'] === 'application/vnd.google-apps.folder')
+        ) {
             return true;
         }
 
@@ -332,7 +338,27 @@ class GoogleDriveDriver extends AbstractHierarchicalFilesystemDriver
 
     public function addFile($localFilePath, $targetFolderIdentifier, $newFileName = '', $removeOriginal = true)
     {
-        // TODO: Implement addFile() method.
+        $service = $this->getGoogleDriveService();
+
+        $contents = file_get_contents($localFilePath);
+
+        $file = new \Google_Service_Drive_DriveFile();
+        $file->setName($newFileName !== ''? $newFileName : PathUtility::basename($localFilePath));
+        $file->setParents([$targetFolderIdentifier]);
+
+        $newFileIdentifier = $service->files->create(
+            $file,
+            [
+                'data' => $contents,
+                'uploadType' => 'media'
+            ]
+        );
+
+        if ($newFileIdentifier && $removeOriginal) {
+            unlink($localFilePath);
+        }
+
+        return $newFileIdentifier->id;
     }
 
     public function createFile($fileName, $parentFolderIdentifier)
@@ -433,7 +459,7 @@ class GoogleDriveDriver extends AbstractHierarchicalFilesystemDriver
 
         $service = $this->getGoogleDriveService();
 
-        $file = new \Google_Service_Drive_DriveFile(); //$service->files->get($fileIdentifier);
+        $file = new \Google_Service_Drive_DriveFile();
 
         try {
             $service->files->update(
@@ -974,6 +1000,62 @@ class GoogleDriveDriver extends AbstractHierarchicalFilesystemDriver
         }
 
         return $record['parents'][0];
+    }
+
+    /**
+     * Checks that the supplied file identifier is correct.
+     *
+     * @param string $theFile File identifier (aka. file path)
+     * @return bool true if valid Google identifier
+     * @see \TYPO3\CMS\Core\Utility\GeneralUtility::validPathStr()
+     */
+    protected function isPathValid($theFile)
+    {
+        return (bool)preg_match(self::IDENTIFIER_PATTERN, $theFile);
+    }
+
+    /**
+     * @inheritDoc
+     */
+    protected function canonicalizeAndCheckFilePath($filePath)
+    {
+        return $this->canonicalizeAndCheckFileIdentifier($filePath);
+    }
+
+    /**
+     * @inheritDoc
+     */
+    protected function canonicalizeAndCheckFileIdentifier($fileIdentifier)
+    {
+        if ($fileIdentifier === 'root') {
+            return $this->getDefaultFolder();
+        }
+
+        return $this->canonicalizeAndCheckObjectIdentifier($fileIdentifier);
+    }
+
+    /**
+     * @inheritDoc
+     */
+    protected function canonicalizeAndCheckFolderIdentifier($folderPath)
+    {
+        return $this->canonicalizeAndCheckObjectIdentifier($folderPath);
+    }
+
+    /**
+     * Makes sure the identifier given as parameter is valid
+     *
+     * @param string $fileIdentifier The file path (including the file name!)
+     * @return string
+     * @throws InvalidPathException
+     */
+    protected function canonicalizeAndCheckObjectIdentifier($identifier)
+    {
+        if (!$this->isPathValid($identifier)) {
+            throw new InvalidPathException('Invalid file identifier: "' . $identifier . "'", 1591534644);
+        }
+
+        return $identifier;
     }
 
     protected function initializeClient()
