@@ -336,6 +336,9 @@ class GoogleDriveDriver extends AbstractHierarchicalFilesystemDriver
         return $this->countFilesInFolder($folderIdentifier) + $this->countFoldersInFolder($folderIdentifier) === 0;
     }
 
+    /**
+     * @inheritDoc
+     */
     public function addFile($localFilePath, $targetFolderIdentifier, $newFileName = '', $removeOriginal = true)
     {
         $service = $this->getGoogleDriveService();
@@ -361,9 +364,12 @@ class GoogleDriveDriver extends AbstractHierarchicalFilesystemDriver
         return $newFileIdentifier->id;
     }
 
+    /**
+     * @inheritDoc
+     */
     public function createFile($fileName, $parentFolderIdentifier)
     {
-        // TODO: Implement createFile() method.
+        return $this->addFile('/dev/null', $parentFolderIdentifier, $fileName, false);
     }
 
     public function copyFileWithinStorage($fileIdentifier, $targetFolderIdentifier, $fileName)
