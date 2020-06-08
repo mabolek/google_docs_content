@@ -395,6 +395,9 @@ class GoogleDriveDriver extends AbstractHierarchicalFilesystemDriver
         // TODO: Implement deleteFile() method.
     }
 
+    /**
+     * @inheritDoc
+     */
     public function hash($fileIdentifier, $hashAlgorithm)
     {
         return $this->hashIdentifier($fileIdentifier);
