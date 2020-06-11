@@ -377,6 +377,9 @@ class GoogleDriveDriver extends AbstractHierarchicalFilesystemDriver
         // TODO: Implement copyFileWithinStorage() method.
     }
 
+    /**
+     * @inheritDoc
+     */
     public function renameFile($fileIdentifier, $newName)
     {
         if (!$this->fileExists($fileIdentifier)) {
@@ -399,16 +402,23 @@ class GoogleDriveDriver extends AbstractHierarchicalFilesystemDriver
             }
         }
 
-        $service = $this->getGoogleDriveService();
-        $file = $service->files->get($fileIdentifier);
+        $file = new \Google_Service_Drive_DriveFile();
+
+        if (!$this->getObjectByIdentifier($fileIdentifier)['capabilities']['canRename']) {
+            throw new FileOperationErrorException(
+                'Could not rename file ID "' . $fileIdentifier . '" because you do not have rename capability.',
+                1591908161
+            );
+        }
 
         $file->setName($newName);
 
         try {
-            $service->files->update(
+            $this->getGoogleDriveService()->files->update(
                 $fileIdentifier,
                 $file,
                 [
+                    'fields' => 'name',
                     'uploadType' => 'multipart'
                 ]
             );
@@ -418,6 +428,19 @@ class GoogleDriveDriver extends AbstractHierarchicalFilesystemDriver
                 . $e->getMessage() . ' (' . $e->getCode() . ')',
                 1591901620
             );
+        }
+
+        if ($this->identifierIsExportFormatRepresentation($originalFileIdentifier)) {
+            $record = $this->getObjectByIdentifier($originalFileIdentifier);
+
+            foreach (
+                self::GOOGLE_MIME_TYPE_TO_EXTENSIONS_AND_EXPORT_FORMATS[$record['originalMimeType']]
+                as $extension => $mimeType
+            ) {
+                unset(self::$metaInfoCache[$fileIdentifier . '.' . $extension]);
+            }
+        } else {
+            unset(self::$metaInfoCache[$originalFileIdentifier]);
         }
 
         return $originalFileIdentifier;
