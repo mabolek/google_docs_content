@@ -379,7 +379,48 @@ class GoogleDriveDriver extends AbstractHierarchicalFilesystemDriver
 
     public function renameFile($fileIdentifier, $newName)
     {
-        // TODO: Implement renameFile() method.
+        if (!$this->fileExists($fileIdentifier)) {
+            throw new FileDoesNotExistException(
+                'A file with the ID "' . $fileIdentifier . '" does not exist.',
+                1591900471
+            );
+        }
+
+        $originalFileIdentifier = $fileIdentifier;
+        if ($this->identifierIsExportFormatRepresentation($fileIdentifier)) {
+            list($fileIdentifier, $fileIdentifierExtension) = explode('.', $fileIdentifier, 2);
+
+            $newNameParts = explode('.', $newName);
+            $newNameExtension = array_pop($newNameParts);
+
+            // Remove extension from file name for export formats
+            if (strcasecmp($newNameExtension, $fileIdentifierExtension) === 0) {
+                $newName = implode('.', $newNameParts);
+            }
+        }
+
+        $service = $this->getGoogleDriveService();
+        $file = $service->files->get($fileIdentifier);
+
+        $file->setName($newName);
+
+        try {
+            $service->files->update(
+                $fileIdentifier,
+                $file,
+                [
+                    'uploadType' => 'multipart'
+                ]
+            );
+        } catch (\Google_Service_Exception $e) {
+            throw new FileOperationErrorException(
+                'Could not rename file ID "' . $fileIdentifier . '" to "' . $newName . '" due to a Google_Service_Exception: '
+                . $e->getMessage() . ' (' . $e->getCode() . ')',
+                1591901620
+            );
+        }
+
+        return $originalFileIdentifier;
     }
 
     /**
