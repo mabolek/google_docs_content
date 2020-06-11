@@ -227,8 +227,8 @@ class GoogleDriveDriver extends AbstractHierarchicalFilesystemDriver
             $identifier = $this->getRootLevelFolder();
         }
 
-        if (isset($this->metaInfoCache[$identifier])) {
-            return $this->metaInfoCache[$identifier];
+        if (isset(self::$metaInfoCache[$identifier])) {
+            return self::$metaInfoCache[$identifier];
         }
 
         $identifierExtension = null;
@@ -266,10 +266,10 @@ class GoogleDriveDriver extends AbstractHierarchicalFilesystemDriver
                     $record = $exportFormatRecord;
                 }
 
-                $this->metaInfoCache[$identfierWithExtension] = $exportFormatRecord;
+                self::$metaInfoCache[$identfierWithExtension] = $exportFormatRecord;
             }
         } else {
-            $this->metaInfoCache[$identifier] = $record;
+            self::$metaInfoCache[$identifier] = $record;
         }
 
         return $record;
