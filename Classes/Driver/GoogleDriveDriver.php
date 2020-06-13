@@ -202,11 +202,6 @@ class GoogleDriveDriver extends AbstractHierarchicalFilesystemDriver
         // TODO: Implement createFolder() method.
     }
 
-    public function renameFolder($folderIdentifier, $newName)
-    {
-        // TODO: Implement renameFolder() method.
-    }
-
     public function deleteFolder($folderIdentifier, $deleteRecursively = false)
     {
         // TODO: Implement deleteFolder() method.
@@ -420,18 +415,40 @@ class GoogleDriveDriver extends AbstractHierarchicalFilesystemDriver
     /**
      * @inheritDoc
      */
+    public function renameFolder($folderIdentifier, $newName)
+    {
+        $identifier = $this->renameObject($folderIdentifier, $newName);
+        return [$identifier => $identifier];
+    }
+
+    /**
+     * @inheritDoc
+     */
     public function renameFile($fileIdentifier, $newName)
     {
-        if (!$this->fileExists($fileIdentifier)) {
+        return $this->renameObject($fileIdentifier, $newName);
+    }
+
+    /**
+     * @param string $identifier
+     * @param string $newName
+     * @return string
+     * @throws FileDoesNotExistException
+     * @throws FileOperationErrorException
+     * @throws Google_Service_Exception
+     */
+    protected function renameObject($identifier, $newName)
+    {
+        if (!$this->fileExists($identifier) && !$this->folderExists($identifier)) {
             throw new FileDoesNotExistException(
-                'A file with the ID "' . $fileIdentifier . '" does not exist.',
+                'A file with the ID "' . $identifier . '" does not exist.',
                 1591900471
             );
         }
 
-        $originalFileIdentifier = $fileIdentifier;
-        if ($this->identifierIsExportFormatRepresentation($fileIdentifier)) {
-            list($fileIdentifier, $fileIdentifierExtension) = explode('.', $fileIdentifier, 2);
+        $originalIdentifier = $identifier;
+        if ($this->identifierIsExportFormatRepresentation($identifier)) {
+            list($identifier, $fileIdentifierExtension) = explode('.', $identifier, 2);
 
             $newNameParts = explode('.', $newName);
             $newNameExtension = array_pop($newNameParts);
@@ -444,9 +461,9 @@ class GoogleDriveDriver extends AbstractHierarchicalFilesystemDriver
 
         $file = new \Google_Service_Drive_DriveFile();
 
-        if (!$this->getObjectByIdentifier($fileIdentifier)['capabilities']['canRename']) {
+        if (!$this->getObjectByIdentifier($identifier)['capabilities']['canRename']) {
             throw new FileOperationErrorException(
-                'Could not rename file ID "' . $fileIdentifier . '" because you do not have rename capability.',
+                'Could not rename file ID "' . $identifier . '" because you do not have rename capability.',
                 1591908161
             );
         }
@@ -455,7 +472,7 @@ class GoogleDriveDriver extends AbstractHierarchicalFilesystemDriver
 
         try {
             $this->getGoogleDriveService()->files->update(
-                $fileIdentifier,
+                $identifier,
                 $file,
                 [
                     'fields' => 'name',
@@ -464,26 +481,26 @@ class GoogleDriveDriver extends AbstractHierarchicalFilesystemDriver
             );
         } catch (\Google_Service_Exception $e) {
             throw new FileOperationErrorException(
-                'Could not rename file ID "' . $fileIdentifier . '" to "' . $newName . '" due to a Google_Service_Exception: '
+                'Could not rename file ID "' . $identifier . '" to "' . $newName . '" due to a Google_Service_Exception: '
                 . $e->getMessage() . ' (' . $e->getCode() . ')',
                 1591901620
             );
         }
 
-        if ($this->identifierIsExportFormatRepresentation($originalFileIdentifier)) {
-            $record = $this->getObjectByIdentifier($originalFileIdentifier);
+        if ($this->identifierIsExportFormatRepresentation($originalIdentifier)) {
+            $record = $this->getObjectByIdentifier($originalIdentifier);
 
             foreach (
                 self::GOOGLE_MIME_TYPE_TO_EXTENSIONS_AND_EXPORT_FORMATS[$record['originalMimeType']]
                 as $extension => $mimeType
             ) {
-                unset(self::$metaInfoCache[$fileIdentifier . '.' . $extension]);
+                unset(self::$metaInfoCache[$identifier . '.' . $extension]);
             }
         } else {
-            unset(self::$metaInfoCache[$originalFileIdentifier]);
+            unset(self::$metaInfoCache[$originalIdentifier]);
         }
 
-        return $originalFileIdentifier;
+        return $originalIdentifier;
     }
 
     /**
