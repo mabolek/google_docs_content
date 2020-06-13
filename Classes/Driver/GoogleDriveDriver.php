@@ -372,9 +372,49 @@ class GoogleDriveDriver extends AbstractHierarchicalFilesystemDriver
         return $this->addFile('/dev/null', $parentFolderIdentifier, $fileName, false);
     }
 
+    /**
+     * @inheritDoc
+     */
     public function copyFileWithinStorage($fileIdentifier, $targetFolderIdentifier, $fileName)
     {
-        // TODO: Implement copyFileWithinStorage() method.
+        if (!$this->fileExists($fileIdentifier)) {
+            throw new FileDoesNotExistException(
+                'A file with the ID "' . $fileIdentifier . '" does not exist.',
+                1592043851
+            );
+        }
+
+        if ($this->identifierIsExportFormatRepresentation($fileIdentifier)) {
+            list($fileIdentifier, $fileIdentifierExtension) = explode('.', $fileIdentifier, 2);
+
+            $newNameParts = explode('.', $fileName);
+            $newNameExtension = array_pop($newNameParts);
+
+            // Remove extension from file name for export formats
+            if (strcasecmp($newNameExtension, $fileIdentifierExtension) === 0) {
+                $fileName = implode('.', $newNameParts);
+            }
+        }
+
+        $file = new \Google_Service_Drive_DriveFile();
+        $file->setName($fileName);
+        $file->setParents([$targetFolderIdentifier]);
+
+        try {
+            $newFile = $this->getGoogleDriveService()->files->copy(
+                $fileIdentifier,
+                $file,
+                []
+            );
+        } catch (\Exception $e) {
+            throw new FileOperationErrorException(
+                'Could not copy file ID "' . $fileIdentifier . '" due to a n exception: '
+                . $e->getMessage() . ' (' . $e->getCode() . ')',
+                1592044410
+            );
+        }
+
+        return $newFile->id;
     }
 
     /**
