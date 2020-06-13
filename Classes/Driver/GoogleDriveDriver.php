@@ -226,11 +226,6 @@ class GoogleDriveDriver extends AbstractHierarchicalFilesystemDriver
         return $newFolderIdentifier->id;
     }
 
-    public function deleteFolder($folderIdentifier, $deleteRecursively = false)
-    {
-        // TODO: Implement deleteFolder() method.
-    }
-
     /**
      * @param $identifier
      * @return \Google_Service_Drive_DriveFile|null
@@ -535,9 +530,69 @@ class GoogleDriveDriver extends AbstractHierarchicalFilesystemDriver
         return $this->setFileContents($fileIdentifier, file_get_contents($localFilePath)) > 0;
     }
 
+    /**
+     * @inheritDoc
+     */
+    public function deleteFolder($folderIdentifier, $deleteRecursively = false)
+    {
+        return $this->deleteObject($folderIdentifier, $deleteRecursively);
+    }
+
+    /**
+     * @inheritDoc
+     */
     public function deleteFile($fileIdentifier)
     {
-        // TODO: Implement deleteFile() method.
+        return $this->deleteObject($fileIdentifier);
+    }
+
+    /**
+     * Delete an object from Google drive
+     *
+     * @param string $folderIdentifier
+     * @param bool $deleteRecursively
+     * @return bool
+     */
+    protected function deleteObject($identifier, $deleteRecursively = false)
+    {
+        if (
+            $this->folderExists($identifier)
+            && !$deleteRecursively
+            && ($this->countFoldersInFolder($identifier) > 0 || $this->countFilesInFolder($identifier) > 0)
+        ) {
+            //End early if we're trying to non-recursively delete a folder with contents
+            return false;
+        }
+
+        $originalIdentifier = $identifier;
+        if ($this->identifierIsExportFormatRepresentation($identifier)) {
+            list($identifier, $fileIdentifierExtension) = explode('.', $identifier, 2);
+
+            $record = $this->getObjectByIdentifier($originalIdentifier);
+        }
+
+        $deleteSuccessful = (bool)$this->getGoogleDriveService()->files->delete($identifier);
+
+        if ($deleteSuccessful) {
+            if ($this->identifierIsExportFormatRepresentation($originalIdentifier)) {
+                foreach (
+                    self::GOOGLE_MIME_TYPE_TO_EXTENSIONS_AND_EXPORT_FORMATS[$record['originalMimeType']]
+                    as $extension => $mimeType
+                ) {
+                    unset(self::$metaInfoCache[$identifier . '.' . $extension]);
+                }
+            } elseif (
+                $this->folderExists($identifier)
+                && ($this->countFoldersInFolder($identifier) > 0 || $this->countFilesInFolder($identifier) > 0)
+            ) {
+                // Remove the entire cache if the folder is not empty so we're recursing
+                self::$metaInfoCache = [];
+            } else {
+                unset(self::$metaInfoCache[$originalIdentifier]);
+            }
+        }
+
+        return $deleteSuccessful;
     }
 
     /**
