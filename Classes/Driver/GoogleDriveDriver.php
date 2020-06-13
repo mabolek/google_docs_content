@@ -10,14 +10,12 @@ use GuzzleHttp\Psr7\StreamWrapper;
 use TYPO3\CMS\Core\Resource\Driver\AbstractHierarchicalFilesystemDriver;
 use TYPO3\CMS\Core\Resource\Exception\FileDoesNotExistException;
 use TYPO3\CMS\Core\Resource\Exception\FileOperationErrorException;
-use TYPO3\CMS\Core\Resource\Exception\InsufficientFolderAccessPermissionsException;
 use TYPO3\CMS\Core\Resource\Exception\InvalidPathException;
 use TYPO3\CMS\Core\Resource\Exception\ResourceDoesNotExistException;
 use TYPO3\CMS\Core\Resource\ResourceStorage;
 use TYPO3\CMS\Core\Utility\ArrayUtility;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 use TYPO3\CMS\Core\Utility\PathUtility;
-use TYPO3\CMS\Form\Mvc\Configuration\Exception\FileWriteException;
 
 class GoogleDriveDriver extends AbstractHierarchicalFilesystemDriver
 {
