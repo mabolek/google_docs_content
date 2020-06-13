@@ -197,9 +197,33 @@ class GoogleDriveDriver extends AbstractHierarchicalFilesystemDriver
         return '';
     }
 
+    /**
+     * Create a new folder
+     *
+     * @param string $newFolderName The new folder name
+     * @param string $parentFolderIdentifier The identifier of the parent folder
+     * @param bool $recursive !!! NOT IMPLEMENTED
+     * @return string The new folder ID
+     */
     public function createFolder($newFolderName, $parentFolderIdentifier = '', $recursive = false)
     {
-        // TODO: Implement createFolder() method.
+        if ($parentFolderIdentifier === '') {
+            $parentFolderIdentifier = $this->getDefaultFolder();
+        }
+
+        $folder = new \Google_Service_Drive_DriveFile();
+        $folder->setName($newFolderName);
+        $folder->setParents([$parentFolderIdentifier]);
+        $folder->setMimeType('application/vnd.google-apps.folder');
+
+        $newFolderIdentifier = $this->getGoogleDriveService()->files->create(
+            $folder,
+            [
+                'uploadType' => 'multipart'
+            ]
+        );
+
+        return $newFolderIdentifier->id;
     }
 
     public function deleteFolder($folderIdentifier, $deleteRecursively = false)
