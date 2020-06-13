@@ -1,8 +1,6 @@
 <?php
 
-
 namespace GeorgRinger\GoogleDocsContent\Driver;
-
 
 use GeorgRinger\GoogleDocsContent\Api\Client;
 use Google_Service_Exception;
@@ -917,8 +915,7 @@ class GoogleDriveDriver extends AbstractHierarchicalFilesystemDriver
         $sort = '',
         $sortRev = false,
         $isFolder = false
-    )
-    {
+    ) {
         $records = $this->getRecordsInFolder(
             $folderIdentifier,
             $start,
@@ -959,7 +956,6 @@ class GoogleDriveDriver extends AbstractHierarchicalFilesystemDriver
                     $records = ArrayUtility::sortArraysByKey($records, $sortingKey);
                     break;
             }
-
         }
 
         $objects = [];
@@ -1002,8 +998,8 @@ class GoogleDriveDriver extends AbstractHierarchicalFilesystemDriver
         array $nameFilterCallbacks = [],
         $sort = '',
         $sortRev = false,
-        $isFolder = false)
-    {
+        $isFolder = false
+    ) {
         if ($folderIdentifier === null && $isFolder === true) {
             $folderIdentifier = $this->getRootLevelFolder();
         } elseif ($folderIdentifier === '' || $folderIdentifier === null) {
@@ -1045,7 +1041,7 @@ class GoogleDriveDriver extends AbstractHierarchicalFilesystemDriver
                 }
 
                 $parameters['pageToken'] = $fileList->getNextPageToken();
-            } while($parameters['pageToken'] !== null);
+            } while ($parameters['pageToken'] !== null);
 
             $newRecordsArray = [];
 
@@ -1291,8 +1287,7 @@ class GoogleDriveDriver extends AbstractHierarchicalFilesystemDriver
         $itemName,
         $itemIdentifier,
         $parentIdentifier
-    )
-    {
+    ) {
         foreach ($filterMethods as $filter) {
             if (is_array($filter)) {
                 $result = call_user_func($filter, $itemName, $itemIdentifier, $parentIdentifier, [], $this);
@@ -1300,7 +1295,8 @@ class GoogleDriveDriver extends AbstractHierarchicalFilesystemDriver
                 // if calling the method succeeded and thus we can't use that as a return value.
                 if ($result === -1) {
                     return false;
-                } elseif ($result === false) {
+                }
+                if ($result === false) {
                     throw new \RuntimeException('Could not apply file/folder name filter ' . $filter[0] . '::' . $filter[1]);
                 }
             }
